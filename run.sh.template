@@ -1,0 +1,7 @@
+#!/bin/bash
+
+export TMDB_API_KEY="<your key here>"
+export TMDB_API_ACCESS_TOKEN="<your token here>"
+
+# see: https://stackoverflow.com/a/53214779
+cargo run "${@}"
