@@ -1,0 +1,367 @@
+https://developer.themoviedb.org/reference/tv-series-changes
+
+GET https://api.themoviedb.org/3/tv/226285/changes?end_date=2024-04-30&page=1&start_date=2024-04-16
+
+{
+  "changes": [
+    {
+      "key": "translations",
+      "items": [
+        {
+          "id": "66276e2e63d93701647353e7",
+          "action": "added",
+          "time": "2024-04-23 08:15:42 UTC",
+          "iso_639_1": "",
+          "iso_3166_1": "",
+          "value": "zh-TW"
+        },
+        {
+          "id": "662b9fe399c964011b3a4e4d",
+          "action": "added",
+          "time": "2024-04-26 12:36:51 UTC",
+          "iso_639_1": "",
+          "iso_3166_1": "",
+          "value": "hu-HU"
+        }
+      ]
+    },
+    {
+      "key": "name",
+      "items": [
+        {
+          "id": "66276e3b7a97ab014a8c7632",
+          "action": "added",
+          "time": "2024-04-23 08:15:55 UTC",
+          "iso_639_1": "zh",
+          "iso_3166_1": "TW",
+          "value": "傲骨女律師"
+        }
+      ]
+    },
+    {
+      "key": "overview",
+      "items": [
+        {
+          "id": "66276e3b7a97ab014a8c7633",
+          "action": "added",
+          "time": "2024-04-23 08:15:55 UTC",
+          "iso_639_1": "zh",
+          "iso_3166_1": "TW",
+          "value": "描述艾爾斯貝絲這位「聰穎但非傳統律師」的故事，她將以獨特觀點做出與眾不同的觀察，並與紐約警局要員一同追捕犯罪手法高超的罪犯。"
+        },
+        {
+          "id": "662b9ff08566d2011d7ede6c",
+          "action": "added",
+          "time": "2024-04-26 12:37:04 UTC",
+          "iso_639_1": "hu",
+          "iso_3166_1": "HU",
+          "value": "Elsbeth Tascioni, a rendhagyó ügyvédnő egyedi nézőpontból tesz megfigyeléseket, hogy a New York-i rendőrség mellett bűnözőket fogjon el."
+        }
+      ]
+    },
+    {
+      "key": "images",
+      "items": [
+        {
+          "id": "662788d6258823014b90d236",
+          "action": "added",
+          "time": "2024-04-23 10:09:26 UTC",
+          "iso_639_1": "",
+          "iso_3166_1": "",
+          "value": {
+            "poster": {
+              "file_path": "/lWOzxR1orgiXwCMI77qSY25dC5o.jpg"
+            }
+          }
+        },
+        {
+          "id": "662788e0e54d5d0165ee777f",
+          "action": "updated",
+          "time": "2024-04-23 10:09:36 UTC",
+          "iso_639_1": "zh",
+          "iso_3166_1": "",
+          "value": {
+            "poster": {
+              "file_path": "/lWOzxR1orgiXwCMI77qSY25dC5o.jpg",
+              "iso_639_1": "zh"
+            }
+          },
+          "original_value": {
+            "poster": {
+              "file_path": "/lWOzxR1orgiXwCMI77qSY25dC5o.jpg",
+              "iso_639_1": null
+            }
+          }
+        }
+      ]
+    },
+    {
+      "key": "videos",
+      "items": [
+        {
+          "id": "662b7a475c071b011c5e9cee",
+          "action": "updated",
+          "time": "2024-04-26 09:56:23 UTC",
+          "iso_639_1": "en",
+          "iso_3166_1": "US",
+          "value": {
+            "id": "65e676498d52c9017b415615",
+            "name": "ELSBETH | Official Trailer | CBS",
+            "key": "1J-fCrWcF14",
+            "size": 1080,
+            "site": "YouTube",
+            "type": "Clip"
+          },
+          "original_value": {
+            "id": "65e676498d52c9017b415615",
+            "name": "ELSBETH | Official Trailer | CBS",
+            "key": "1J-fCrWcF14",
+            "size": 1080,
+            "site": "YouTube",
+            "type": "Trailer"
+          }
+        },
+        {
+          "id": "662b7a62e8d0b4011c11628e",
+          "action": "updated",
+          "time": "2024-04-26 09:56:51 UTC",
+          "iso_639_1": "en",
+          "iso_3166_1": "US",
+          "value": {
+            "id": "6484ae76e2726000e8c0b904",
+            "name": "Official Trailer",
+            "key": "B-9va3k0rgo",
+            "size": 1080,
+            "site": "YouTube",
+            "type": "Clip"
+          },
+          "original_value": {
+            "id": "6484ae76e2726000e8c0b904",
+            "name": "Official Trailer",
+            "key": "B-9va3k0rgo",
+            "size": 1080,
+            "site": "YouTube",
+            "type": "Trailer"
+          }
+        },
+        {
+          "id": "662b7a9b5c071b011c5e9d31",
+          "action": "updated",
+          "time": "2024-04-26 09:57:47 UTC",
+          "iso_639_1": "en",
+          "iso_3166_1": "US",
+          "value": {
+            "id": "645ce04d1b70ae0187e2bd76",
+            "name": "Elsbeth (CBS) Trailer HD - The Good Wife spinoff",
+            "key": "SQ2WX99QXXY",
+            "size": 1080,
+            "site": "YouTube",
+            "type": "Trailer"
+          },
+          "original_value": {
+            "id": "645ce04d1b70ae0187e2bd76",
+            "name": "Elsbeth (CBS) Trailer HD - The Good Wife spinoff",
+            "key": "SQ2WX99QXXY",
+            "size": 720,
+            "site": "YouTube",
+            "type": "Trailer"
+          }
+        },
+        {
+          "id": "662e3cd2c3aa3f0129fd6707",
+          "action": "added",
+          "time": "2024-04-28 12:10:58 UTC",
+          "iso_639_1": "es",
+          "iso_3166_1": "ES",
+          "value": {
+            "id": "662e3cd2c3aa3f0129fd6706",
+            "name": "📺 ELSBETH | SERIE TRAILER ESPAÑOL | 23 Abril/24 - MOVISTAR PLUS+",
+            "key": "xU50D3GhYLQ",
+            "size": 1080,
+            "site": "YouTube",
+            "type": "Trailer"
+          }
+        }
+      ]
+    },
+    {
+      "key": "season",
+      "items": [
+        {
+          "id": "661dc527a6fdaa017d69eeb0",
+          "action": "updated",
+          "time": "2024-04-16 00:24:07 UTC",
+          "iso_639_1": "",
+          "iso_3166_1": "",
+          "value": {
+            "season_id": 340471,
+            "season_number": 1
+          }
+        },
+        {
+          "id": "6621a8068a88b20162c9f8eb",
+          "action": "updated",
+          "time": "2024-04-18 23:08:54 UTC",
+          "iso_639_1": "",
+          "iso_3166_1": "",
+          "value": {
+            "season_id": 340471,
+            "season_number": 1
+          }
+        },
+        {
+          "id": "6621b97478570e017e10c440",
+          "action": "updated",
+          "time": "2024-04-19 00:23:16 UTC",
+          "iso_639_1": "",
+          "iso_3166_1": "",
+          "value": {
+            "season_id": 340471,
+            "season_number": 1
+          }
+        },
+        {
+          "id": "6623e1ca62f3350164d7b703",
+          "action": "updated",
+          "time": "2024-04-20 15:39:54 UTC",
+          "iso_639_1": "",
+          "iso_3166_1": "",
+          "value": {
+            "season_id": 340471,
+            "season_number": 1
+          }
+        },
+        {
+          "id": "662458acaf9590017d67ffc3",
+          "action": "updated",
+          "time": "2024-04-21 00:07:08 UTC",
+          "iso_639_1": "",
+          "iso_3166_1": "",
+          "value": {
+            "season_id": 340471,
+            "season_number": 1
+          }
+        },
+        {
+          "id": "66260cf2af9590017d6a108e",
+          "action": "updated",
+          "time": "2024-04-22 07:08:34 UTC",
+          "iso_639_1": "",
+          "iso_3166_1": "",
+          "value": {
+            "season_id": 340471,
+            "season_number": 1
+          }
+        },
+        {
+          "id": "66275f29cb5c8e014a3f29e3",
+          "action": "updated",
+          "time": "2024-04-23 07:11:37 UTC",
+          "iso_639_1": "",
+          "iso_3166_1": "",
+          "value": {
+            "season_id": 340471,
+            "season_number": 1
+          }
+        },
+        {
+          "id": "6628db39378062017eda8041",
+          "action": "updated",
+          "time": "2024-04-24 10:13:13 UTC",
+          "iso_639_1": "",
+          "iso_3166_1": "",
+          "value": {
+            "season_id": 340471,
+            "season_number": 1
+          }
+        },
+        {
+          "id": "662b37bd5c071b011e5e7eb3",
+          "action": "updated",
+          "time": "2024-04-26 05:12:29 UTC",
+          "iso_639_1": "",
+          "iso_3166_1": "",
+          "value": {
+            "season_id": 340471,
+            "season_number": 1
+          }
+        },
+        {
+          "id": "662d5aab69d280012942a9e4",
+          "action": "updated",
+          "time": "2024-04-27 20:06:03 UTC",
+          "iso_639_1": "",
+          "iso_3166_1": "",
+          "value": {
+            "season_id": 340471,
+            "season_number": 1
+          }
+        },
+        {
+          "id": "662d91865b95080125557667",
+          "action": "updated",
+          "time": "2024-04-28 00:00:06 UTC",
+          "iso_639_1": "",
+          "iso_3166_1": "",
+          "value": {
+            "season_id": 340471,
+            "season_number": 1
+          }
+        }
+      ]
+    },
+    {
+      "key": "plot_keywords",
+      "items": [
+        {
+          "id": "661ed6b2a6fdaa017d6b199a",
+          "action": "added",
+          "time": "2024-04-16 19:51:14 UTC",
+          "iso_639_1": "",
+          "iso_3166_1": "",
+          "value": {
+            "name": "comforting",
+            "id": 325784,
+            "group": "tones"
+          }
+        },
+        {
+          "id": "661ed6baa39d0b017d5593f1",
+          "action": "added",
+          "time": "2024-04-16 19:51:22 UTC",
+          "iso_639_1": "",
+          "iso_3166_1": "",
+          "value": {
+            "name": "amused",
+            "id": 325765,
+            "group": "tones"
+          }
+        },
+        {
+          "id": "661ed6bf3c4344016302adac",
+          "action": "added",
+          "time": "2024-04-16 19:51:27 UTC",
+          "iso_639_1": "",
+          "iso_3166_1": "",
+          "value": {
+            "name": "cheerful",
+            "id": 325782,
+            "group": "tones"
+          }
+        },
+        {
+          "id": "661ed6c36d9fe8017d60879c",
+          "action": "added",
+          "time": "2024-04-16 19:51:31 UTC",
+          "iso_639_1": "",
+          "iso_3166_1": "",
+          "value": {
+            "name": "playful",
+            "id": 259376,
+            "group": "tones"
+          }
+        }
+      ]
+    }
+  ]
+}

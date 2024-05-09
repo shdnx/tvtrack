@@ -1,0 +1,32 @@
+https://developer.themoviedb.org/reference/search-tv
+
+GET https://api.themoviedb.org/3/search/tv?query=Elsbeth&first_air_date_year=2024&include_adult=false&language=en-US&page=1
+
+{
+  "page": 1,
+  "results": [
+    {
+      "adult": false,
+      "backdrop_path": "/sgjzVmeLfgc1TcxM414BA2oSxRE.jpg",
+      "genre_ids": [
+        80,
+        18
+      ],
+      "id": 226285,
+      "origin_country": [
+        "US"
+      ],
+      "original_language": "en",
+      "original_name": "Elsbeth",
+      "overview": "After her successful career in Chicago, Elsbeth Tascioni, an astute but unconventional attorney, utilizes her singular point of view to make unique observations and corner brilliant criminals alongside the NYPD.",
+      "popularity": 169.246,
+      "poster_path": "/q6RxCjj3I8FUPQHSkXnnE1xG2wn.jpg",
+      "first_air_date": "2024-02-29",
+      "name": "Elsbeth",
+      "vote_average": 8.2,
+      "vote_count": 10
+    }
+  ],
+  "total_pages": 1,
+  "total_results": 1
+}

@@ -1,0 +1,2 @@
+ - we could also keep track of popular shows using https://developer.themoviedb.org/reference/movie-popular-list and send some recommendations based on that?
+ - track releases on NCore as well?

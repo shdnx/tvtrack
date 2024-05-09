@@ -1,0 +1,68 @@
+https://developer.themoviedb.org/reference/tv-season-details
+
+GET https://api.themoviedb.org/3/tv/108545/season/1?language=en-US
+
+{
+  "_id": "5f4eb2c241465c0036aa727e",
+  "air_date": "2024-03-21",
+  "episodes": [
+    ...,
+    {
+      "air_date": "2024-03-21",
+      "episode_number": 6,
+      "episode_type": "standard",
+      "id": 5051966,
+      "name": "The Stars Our Destination",
+      "overview": "With the world in a state of panic following a momentous declaration, Wade gathers the world's greatest minds to prepare a defense plan.",
+      "production_code": "",
+      "runtime": 49,
+      "season_number": 1,
+      "show_id": 108545,
+      "still_path": "/oXAQhLOSh76CImna8vaDFpA1pDR.jpg",
+      "vote_average": 7.765,
+      "vote_count": 17,
+      "crew": [...],
+      "guest_stars": [...]
+    },
+    {
+      "air_date": "2024-03-21",
+      "episode_number": 7,
+      "episode_type": "standard",
+      "id": 5051967,
+      "name": "Only Advance",
+      "overview": "A bold proposition for the Staircase Project puts the group at odds. Will weighs his options. Ye returns to a familiar place.",
+      "production_code": "",
+      "runtime": 59,
+      "season_number": 1,
+      "show_id": 108545,
+      "still_path": "/ceEYvTaXQ84HLnIGxMbUWDkvC6V.jpg",
+      "vote_average": 7.75,
+      "vote_count": 16,
+      "crew": [...],
+      "guest_stars": [...]
+    },
+    {
+      "air_date": "2024-03-21",
+      "episode_number": 8,
+      "episode_type": "finale",
+      "id": 5051968,
+      "name": "Wallfacer",
+      "overview": "A high-level operation upends Saul's life. With emotions and expectations high, the probe launches into space as humanity enters a daunting new era.",
+      "production_code": "",
+      "runtime": 57,
+      "season_number": 1,
+      "show_id": 108545,
+      "still_path": "/bXQgkpS4TV6FottbpKjv82AJunG.jpg",
+      "vote_average": 7.429,
+      "vote_count": 21,
+      "crew": [...],
+      "guest_stars": [...]
+    }
+  ],
+  "name": "Season 1",
+  "overview": "",
+  "id": 160939,
+  "poster_path": "/ppVfleDCXHvhqKKiycGRpitATOL.jpg",
+  "season_number": 1,
+  "vote_average": 7.7
+}

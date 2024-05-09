@@ -1,0 +1,35 @@
+https://developer.themoviedb.org/reference/find-by-id
+
+GET https://api.themoviedb.org/3/find/tt13016388?external_source=imdb_id
+
+{
+  "movie_results": [],
+  "person_results": [],
+  "tv_results": [
+    {
+      "backdrop_path": "/ciizJ9Okzt9tBBGK7Q3T14LFT2j.jpg",
+      "id": 108545,
+      "original_name": "3 Body Problem",
+      "overview": "Across continents and decades, five brilliant friends make earth-shattering discoveries as the laws of science unravel and an existential threat emerges.",
+      "poster_path": "/ykZ7hlShkdRQaL2aiieXdEMmrLb.jpg",
+      "media_type": "tv",
+      "adult": false,
+      "name": "3 Body Problem",
+      "original_language": "en",
+      "genre_ids": [
+        10765,
+        9648,
+        18
+      ],
+      "popularity": 541.503,
+      "first_air_date": "2024-03-21",
+      "vote_average": 7.523,
+      "vote_count": 599,
+      "origin_country": [
+        "US"
+      ]
+    }
+  ],
+  "tv_episode_results": [],
+  "tv_season_results": []
+}
