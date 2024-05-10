@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use std::fmt;
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
-pub struct SeriesId(i32);
+pub struct SeriesId(pub i32);
 
 impl fmt::Display for SeriesId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -20,13 +20,44 @@ impl fmt::Display for SeriesId {
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
-pub struct EpisodeId(i32);
+pub struct EpisodeId(pub i32);
 
 impl fmt::Display for EpisodeId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.0)
     }
 }
+
+// #[derive(Debug, Clone)]
+// pub enum EpisodeType {
+//     Standard,
+//     Finale,
+// }
+
+// impl fmt::Display for EpisodeType {
+//     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+//         match self {
+//             Self::Standard => write!(f, "standard"),
+//             Self::Finale => write!(f, "finale"),
+//         }
+//     }
+// }
+
+// impl serde::Serialize for EpisodeType {
+//     fn serialize<S>(&self, serializer: S) -> std::prelude::v1::Result<S::Ok, S::Error>
+//         where
+//             S: serde::Serializer {
+//         serializer.serialize_str(&self.to_string())
+//     }
+// }
+
+// impl<'de> serde::Deserialize<'de> for EpisodeType {
+//     fn deserialize<D>(deserializer: D) -> std::prelude::v1::Result<Self, D::Error>
+//         where
+//             D: serde::Deserializer<'de> {
+//         deserializer.deserialize_str(visitor)
+//     }
+// }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct EpisodeDetails {
@@ -63,6 +94,9 @@ pub struct SeriesDetails {
 
     /// Title
     pub name: String,
+
+    #[serde(default)]
+    pub first_air_date: OptionalDate,
 
     pub number_of_seasons: i32,
     pub number_of_episodes: i32,

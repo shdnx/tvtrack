@@ -1,6 +1,8 @@
 use std::fmt;
 
-#[derive(Debug, Clone, Copy)]
+/// Equivalent to `Option<chrono::NaiveDate>` except in JSON parses an empty string to `None`.
+/// This is needed because TMDB will send empty strings for missing dates instead of `null`.
+#[derive(Debug, Clone, Copy, Default)]
 pub struct OptionalDate(pub Option<chrono::NaiveDate>);
 
 pub(crate) struct DeserializeVisitor;
