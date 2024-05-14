@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::{default, fmt};
+use std::fmt;
 
 use super::OptionalDate;
 

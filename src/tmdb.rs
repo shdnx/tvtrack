@@ -1,3 +1,5 @@
+#![allow(unused_imports, unused_import_braces)]
+
 mod client;
 mod episode;
 mod optional_date;
