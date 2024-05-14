@@ -53,7 +53,7 @@ impl serde::Serialize for OptionalDate {
 impl fmt::Display for OptionalDate {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self.0 {
-            None => write!(f, "<no date>"),
+            None => write!(f, "<unknown>"),
             Some(dt) => dt.fmt(f),
         }
     }

@@ -42,3 +42,14 @@ pub struct EpisodeDetails {
     pub episode_type: EpisodeType,
     pub air_date: OptionalDate,
 }
+
+impl EpisodeDetails {
+    // TODO: return a proxy value instead that can be formatted by implementing Display?
+    pub fn identify(&self) -> String {
+        let mut result = format!("S{:02}E{:02} {} on {}", self.season_number, self.episode_number, self.name, self.air_date);
+        if self.episode_type != EpisodeType::Standard {
+            result += format!(" {}", self.episode_type).as_ref();
+        }
+        result
+    }
+}

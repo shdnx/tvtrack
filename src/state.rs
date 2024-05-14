@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use crate::result::Result as AnyResult;
 use crate::tmdb;
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct ApplicationState {
     pub tracked_series: HashMap<tmdb::SeriesId, SeriesState>,
 }
@@ -29,11 +29,11 @@ impl ApplicationState {
                 println!("Loading state file {file_path}");
                 let state_json = serde_json::from_str::<JsonApplicationState>(&state_str)?;
                 Ok(Self::from_json(state_json))
-            },
+            }
             Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
                 println!("Note: state file {file_path} does not exist, loading empty state");
                 Ok(ApplicationState::new())
-            },
+            }
             Err(err) => Err(err.into()),
         }
     }

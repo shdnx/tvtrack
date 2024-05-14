@@ -2,3 +2,4 @@
 tracked-series.txt
 run.sh
 tvtrack.state.json
+/src/bin

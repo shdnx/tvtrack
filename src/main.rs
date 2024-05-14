@@ -12,7 +12,7 @@ fn print_help() {
  - a | add <title> [<release year>]: register a series with the specified title to track.
  - add-id <id>: add a series by TMDB ID.
  - add-all <file>: read the text file at the specified path, interpreting each line as a title to add as if individually done with the 'add' command.
- - check: for each non-Ended tracked series, check for updates by fetching their series details from TMDB. Trigger a notification on the summary of changes.
+ - update [<id>] [-f | --force]: update one specific or all tracked series, checking for updates by fetching the details from TMDB. Trigger a notification on the summary of changes. Force performs the update regardless of how much time passed since the last update.
  - h | help: show this help message.
 "#
     );
@@ -20,11 +20,16 @@ fn print_help() {
 
 struct CmdContext {
     tmdb_client: tmdb::Client,
-    app_state: ApplicationState,
-    app_state_changed: bool, // TODO: probably move into ApplicationState?
+    now: chrono::DateTime<chrono::Utc>,
+    app_state_changed: bool,
 }
 
-fn add_series(ctx: &mut CmdContext, title: &str, first_air_year: Option<i32>) -> Result<bool> {
+fn add_series(
+    ctx: &mut CmdContext,
+    app_state: &mut ApplicationState,
+    title: &str,
+    first_air_year: Option<i32>,
+) -> Result<bool> {
     println!(
         "Add series: {title}{}",
         first_air_year
@@ -73,13 +78,17 @@ fn add_series(ctx: &mut CmdContext, title: &str, first_air_year: Option<i32>) ->
         best_match.name, best_match.first_air_date, best_match.overview
     );
 
-    add_series_by_id(ctx, best_match.id)
+    add_series_by_id(ctx, app_state, best_match.id)
 }
 
-fn add_series_by_id(ctx: &mut CmdContext, id: SeriesId) -> Result<bool> {
+fn add_series_by_id(
+    ctx: &mut CmdContext,
+    app_state: &mut ApplicationState,
+    id: SeriesId,
+) -> Result<bool> {
     println!("Adding series by id: {id}");
 
-    if ctx.app_state.tracked_series.contains_key(&id) {
+    if app_state.tracked_series.contains_key(&id) {
         println!("-- Ignoring: series is already tracked");
         return Ok(true);
     }
@@ -110,7 +119,7 @@ fn add_series_by_id(ctx: &mut CmdContext, id: SeriesId) -> Result<bool> {
         println!("-- Next episode: unknown");
     }
 
-    ctx.app_state.tracked_series.insert(
+    app_state.tracked_series.insert(
         series_details.id,
         SeriesState {
             details: series_details,
@@ -122,7 +131,11 @@ fn add_series_by_id(ctx: &mut CmdContext, id: SeriesId) -> Result<bool> {
     Ok(true)
 }
 
-fn add_all_series(ctx: &mut CmdContext, file_path: &str) -> Result<()> {
+fn add_all_series(
+    ctx: &mut CmdContext,
+    app_state: &mut ApplicationState,
+    file_path: &str,
+) -> Result<()> {
     println!("Adding all series from file: {file_path}");
 
     // Allow the line to optionally end in the release (first air) year in parens, e.g. (2024).
@@ -149,7 +162,7 @@ fn add_all_series(ctx: &mut CmdContext, file_path: &str) -> Result<()> {
 
         let (title, first_air_year) = parse_line(line);
 
-        add_series(ctx, title, first_air_year)?;
+        add_series(ctx, app_state, title, first_air_year)?;
         println!();
     }
 
@@ -157,12 +170,20 @@ fn add_all_series(ctx: &mut CmdContext, file_path: &str) -> Result<()> {
 }
 
 struct SeriesDetailsChanges {
-    id: SeriesId,
     in_production_change: Option<(bool, bool)>,
     status_change: Option<(SeriesStatus, SeriesStatus)>,
     next_episode_change: Option<(Option<EpisodeDetails>, Option<EpisodeDetails>)>,
     episode_count_change: Option<(i32, i32)>,
     // TODO: we should also check for episodes that have aired, as next_episode_to_air may change in bulk (e.g. on Netflix where a whole season is released all at once)
+}
+
+impl SeriesDetailsChanges {
+    fn has_any_changes(&self) -> bool {
+        self.in_production_change.is_some()
+            || self.status_change.is_some()
+            || self.next_episode_change.is_some()
+            || self.episode_count_change.is_some()
+    }
 }
 
 fn collect_series_details_changes(
@@ -172,7 +193,6 @@ fn collect_series_details_changes(
     assert_eq!(old_details.id, new_details.id);
 
     let mut changes = SeriesDetailsChanges {
-        id: old_details.id,
         in_production_change: None,
         status_change: None,
         next_episode_change: None,
@@ -207,28 +227,98 @@ fn collect_series_details_changes(
     changes
 }
 
-fn update_series_state(
+fn update_and_collect_changes(
     ctx: &mut CmdContext,
     series_state: &mut SeriesState,
-) -> Result<SeriesDetailsChanges> {
+) -> Result<(SeriesDetailsChanges, chrono::DateTime<chrono::Utc>)> {
     let new_details = ctx
         .tmdb_client
         .get_series_details(series_state.details.id)?;
     let changes = collect_series_details_changes(&series_state.details, &new_details);
 
     series_state.details = new_details;
-    series_state.timestamp = chrono::Utc::now(); // TODO: this could be optimized, it'll be the same for all series updated now
-    ctx.app_state_changed = true;
 
-    Ok(changes)
+    let old_timestamp = series_state.timestamp;
+    series_state.timestamp = ctx.now;
+
+    Ok((changes, old_timestamp))
 }
 
-fn perform_update_all(ctx: &mut CmdContext) -> Result<()> {
-    // fn get_update_frequency(series: &SeriesDetails) -> chrono::TimeDelta {
-    //     if series.status == "Ended" {
+fn update_one_series(
+    ctx: &mut CmdContext,
+    series_state: &mut SeriesState,
+    force: bool,
+) -> Result<bool> {
+    fn get_update_frequency(series: &SeriesDetails) -> chrono::TimeDelta {
+        match series.status {
+            SeriesStatus::ReturningSeries => chrono::TimeDelta::days(3),
+            SeriesStatus::Canceled | SeriesStatus::Ended => chrono::TimeDelta::weeks(1),
+        }
+    }
 
-    //     }
-    // }
+    let update_freq = get_update_frequency(&series_state.details);
+    if !force && ctx.now - series_state.timestamp < update_freq {
+        println!(
+            "Not updating {} because not enough time passed since last update at {}",
+            series_state.details.identify(),
+            series_state.timestamp
+        );
+        return Ok(false);
+    }
+
+    let (changes, since_timestamp) = update_and_collect_changes(ctx, series_state)?;
+    ctx.app_state_changed = true; // since we updated the series details
+
+    if !changes.has_any_changes() {
+        println!(
+            "No changes to {} since last update at {since_timestamp}",
+            series_state.details.identify()
+        );
+        return Ok(false);
+    }
+
+    // TODO: by e-mail
+    println!("Series {} changes:", series_state.details.identify());
+    if let Some((old_in_prod, new_in_prod)) = changes.in_production_change {
+        println!(" - In production: {old_in_prod} => {new_in_prod}");
+    }
+    if let Some((old_status, new_status)) = changes.status_change {
+        println!(" - Status: {old_status} => {new_status}");
+    }
+    if let Some((old_next_ep, new_next_ep)) = changes.next_episode_change {
+        println!(
+            " - Next episode: {} => {}",
+            old_next_ep
+                .map(|e| e.identify())
+                .unwrap_or("unknown".into()),
+            new_next_ep
+                .map(|e| e.identify())
+                .unwrap_or("unknown".into())
+        );
+    }
+    if let Some((old_ep_count, new_ep_count)) = changes.episode_count_change {
+        println!(" - Episode count: {old_ep_count} => {new_ep_count}");
+    }
+
+    Ok(true)
+}
+
+fn update_all_series(
+    ctx: &mut CmdContext,
+    app_state: &mut ApplicationState,
+    force: bool,
+) -> Result<()> {
+    for (_series_id, series_state) in app_state.tracked_series.iter_mut() {
+        match update_one_series(ctx, series_state, force) {
+            Ok(_) => {}
+            Err(err) => {
+                eprintln!(
+                    "Error while updating series {}: {err:?}",
+                    series_state.details.identify()
+                );
+            }
+        }
+    }
 
     Ok(())
 }
@@ -246,9 +336,10 @@ fn main() -> Result<()> {
     };
     let state_file_path = "tvtrack.state.json"; // TODO: take optionally from command line arg?
 
+    let mut app_state = ApplicationState::read_from_or_new(state_file_path)?;
     let mut ctx = CmdContext {
         tmdb_client: tmdb::Client::new(tmdb_api_token),
-        app_state: ApplicationState::read_from_or_new(state_file_path)?,
+        now: chrono::Utc::now(), // optimization: take the time only once
         app_state_changed: false,
     };
 
@@ -256,7 +347,7 @@ fn main() -> Result<()> {
         "a" | "add" => {
             let title = args.get(1).expect("Expected title of series to add");
             let first_air_year = args.get(2).and_then(|a| a.parse::<i32>().ok());
-            add_series(&mut ctx, title, first_air_year)?;
+            add_series(&mut ctx, &mut app_state, title, first_air_year)?;
         }
         "add-id" => {
             let series_id = SeriesId(
@@ -264,16 +355,46 @@ fn main() -> Result<()> {
                     .and_then(|a| a.parse::<i32>().ok())
                     .expect("Expected TMDB series ID to add"),
             );
-            add_series_by_id(&mut ctx, series_id)?;
+            add_series_by_id(&mut ctx, &mut app_state, series_id)?;
         }
         "add-all" => {
             let file_path = args
                 .get(1)
                 .expect("Expected path to file containing series titles to add");
-            add_all_series(&mut ctx, file_path)?;
+            add_all_series(&mut ctx, &mut app_state, file_path)?;
         }
         "u" | "update" => {
-            perform_update_all(&mut ctx)?;
+            match args.get(1).map(|s| s.as_ref()) {
+                Some(series_id) if series_id.parse::<i32>().is_ok() => {
+                    let series_id =
+                        SeriesId(series_id.parse::<i32>().expect("Series ID to update"));
+
+                    let series_state = match app_state.tracked_series.get_mut(&series_id) {
+                        Some(s) => s,
+                        None => {
+                            eprintln!("Error: no tracked series with ID {series_id}");
+                            return Ok(()); // TODO: should return an error
+                        }
+                    };
+
+                    // TODO: not great arg handling
+                    let force = args
+                        .get(2)
+                        .map(|a| a == "-f" || a == "--force")
+                        .unwrap_or(false);
+
+                    update_one_series(&mut ctx, series_state, force)?;
+                }
+                Some("-f") | Some("--force") => {
+                    update_all_series(&mut ctx, &mut app_state, true)?;
+                }
+                Some(unknown_arg) => {
+                    eprintln!("Error: unknown argument {unknown_arg}");
+                }
+                None => {
+                    update_all_series(&mut ctx, &mut app_state, false)?;
+                }
+            }
         }
         "h" | "help" | "-h" | "--help" => {
             print_help();
@@ -285,7 +406,7 @@ fn main() -> Result<()> {
     };
 
     if ctx.app_state_changed {
-        ctx.app_state.write_to(state_file_path)?;
+        app_state.write_to(state_file_path)?;
     }
 
     Ok(())

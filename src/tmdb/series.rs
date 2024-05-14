@@ -1,3 +1,4 @@
+use chrono::Datelike;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
@@ -96,6 +97,10 @@ pub struct SeriesDetails {
 }
 
 impl SeriesDetails {
+    pub fn identify(&self) -> String {
+        format!("[{}] {} ({})", self.id, self.name, self.first_air_date.unwrap().year())
+    }
+
     pub fn next_episode_date(&self) -> Option<chrono::NaiveDate> {
         self.next_episode_to_air
             .as_ref()
