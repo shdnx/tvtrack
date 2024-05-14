@@ -69,7 +69,4 @@ impl ApplicationState {
 pub struct SeriesState {
     pub details: tmdb::SeriesDetails,
     pub timestamp: chrono::DateTime<chrono::Utc>,
-    // cancelled or ended shows are enough to be polled once in a blue moon to check if they get picked up again, as unlikely as that is
-    // shows with the next episode date known probably don't have to be polled again until after that date -- though I guess the date could change
-    // shows with no known next episode date just poll as usual
 }
