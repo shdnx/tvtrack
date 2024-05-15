@@ -1,8 +1,8 @@
-use std::fmt;
+use std::{cmp, fmt};
 
-/// Equivalent to `Option<chrono::NaiveDate>` except in JSON parses an empty string to `None`.
+/// Mostly equivalent to `Option<chrono::NaiveDate>` except in JSON parses an empty string to `None`.
 /// This is needed because TMDB will send empty strings for missing dates instead of `null`.
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct OptionalDate(pub Option<chrono::NaiveDate>);
 
 pub(crate) struct DeserializeVisitor;
@@ -47,6 +47,18 @@ impl serde::Serialize for OptionalDate {
             None => serializer.serialize_str(""),
             Some(date) => serializer.serialize_str(&date.to_string()),
         }
+    }
+}
+
+impl PartialOrd for OptionalDate {
+    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for OptionalDate {
+    fn cmp(&self, other: &Self) -> cmp::Ordering {
+        self.0.cmp(&other.0)
     }
 }
 

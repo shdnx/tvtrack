@@ -84,7 +84,9 @@ pub fn update_one_series(
 ) -> Result<bool> {
     fn get_update_frequency(series: &SeriesDetails) -> chrono::TimeDelta {
         match series.status {
-            SeriesStatus::ReturningSeries => chrono::TimeDelta::days(3),
+            SeriesStatus::InProduction | SeriesStatus::ReturningSeries => {
+                chrono::TimeDelta::days(3)
+            }
             SeriesStatus::Canceled | SeriesStatus::Ended => chrono::TimeDelta::weeks(1),
         }
     }

@@ -15,6 +15,9 @@ impl fmt::Display for SeriesId {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SeriesStatus {
+    /// This seems to be used to mean yet-unreleased series only.
+    /// Note that there's also `SeriesDetails::in_production`
+    InProduction,
     ReturningSeries,
     Ended,
     Canceled,
@@ -23,6 +26,7 @@ pub enum SeriesStatus {
 impl fmt::Display for SeriesStatus {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::InProduction => write!(f, "in production"),
             Self::ReturningSeries => write!(f, "returning series"),
             Self::Ended => write!(f, "ended"),
             Self::Canceled => write!(f, "canceled"),
@@ -36,6 +40,7 @@ impl Serialize for SeriesStatus {
         S: serde::Serializer,
     {
         match self {
+            Self::InProduction => s.serialize_str("In Production"),
             Self::ReturningSeries => s.serialize_str("Returning Series"),
             Self::Ended => s.serialize_str("Ended"),
             Self::Canceled => s.serialize_str("Canceled"),
@@ -54,7 +59,10 @@ impl<'de> Deserialize<'de> for SeriesStatus {
             type Value = SeriesStatus;
 
             fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
-                write!(f, "One of 'Returning Series', 'Canceled', or 'Ended'")
+                write!(
+                    f,
+                    "One of 'In Production', 'Returning Series', 'Canceled', or 'Ended'"
+                )
             }
 
             fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
@@ -62,12 +70,13 @@ impl<'de> Deserialize<'de> for SeriesStatus {
                 E: serde::de::Error,
             {
                 match v {
+                    "In Production" => Ok(SeriesStatus::InProduction),
                     "Returning Series" => Ok(SeriesStatus::ReturningSeries),
                     "Canceled" => Ok(SeriesStatus::Canceled),
                     "Ended" => Ok(SeriesStatus::Ended),
                     val => Err(serde::de::Error::unknown_variant(
                         val,
-                        &["Returning Series", "Canceled", "Ended"],
+                        &["In Production", "Returning Series", "Canceled", "Ended"],
                     )),
                 }
             }
@@ -98,7 +107,12 @@ pub struct SeriesDetails {
 
 impl SeriesDetails {
     pub fn identify(&self) -> String {
-        format!("[{}] {} ({})", self.id, self.name, self.first_air_date.unwrap().year())
+        format!(
+            "[{}] {} ({})",
+            self.id,
+            self.name,
+            self.first_air_date.unwrap().year()
+        )
     }
 
     pub fn next_episode_date(&self) -> Option<chrono::NaiveDate> {

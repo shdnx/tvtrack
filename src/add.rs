@@ -1,4 +1,4 @@
-use super::{CmdContext, ApplicationState, Result, SeriesId, SeriesStatus, SeriesState};
+use super::{ApplicationState, CmdContext, Result, SeriesId, SeriesState, SeriesStatus};
 
 pub fn add_series(
     ctx: &mut CmdContext,
@@ -14,21 +14,15 @@ pub fn add_series(
     );
     let search_result = ctx.tmdb_client.search_series(title, first_air_year)?;
 
-    if search_result.results.len() > 1 {
-        for sr in search_result.results.iter() {
-            println!(
-                "-- Result: #{} {} ({}): {}",
-                sr.id, sr.name, sr.first_air_date, sr.overview
-            );
-        }
+    for sr in search_result.results.iter() {
+        println!(
+            "-- Result: #{} {} ({}): {}",
+            sr.id, sr.name, sr.first_air_date, sr.overview
+        );
     }
 
-    // filter out any results without a first air date, I think those are not series but maybe episodes?
-    let mut candidates: Vec<_> = search_result
-        .results
-        .iter()
-        .filter(|sr| sr.first_air_date.is_some())
-        .collect();
+    // NOTE: sometimes the search results seem to contain non-series results, perhaps episodes? those always have `first_air_date == None`, but we can't just use that as a filter because then we prevent announced yet unreleased series to be added
+    let mut candidates: Vec<_> = search_result.results;
 
     // see if any candidates have an exact name match, if so, we want an exact match
     // TODO: this is not foolproof if a release year is not specified, as it may be that an ancient title happens to match the exact spelling while we actually wanted one that has an extra dot or color or whatever
@@ -36,10 +30,9 @@ pub fn add_series(
         candidates.retain(|sr| sr.name == title);
     }
 
-    // if there are multiple candidates, assume the most recent one
-    let best_match = candidates
-        .iter()
-        .max_by_key(|sr| sr.first_air_date.unwrap());
+    // if there are multiple candidates, prefer the one that is already released and most recently so
+    // this is already how `Option<chrono::NaiveDate>` and so `OptionalDate` are ordered, so we can just take the max
+    let best_match = candidates.iter().max_by_key(|sr| sr.first_air_date);
 
     let best_match = match best_match {
         None => {
