@@ -1,17 +1,31 @@
+use crate::tmdb::SeriesId;
+
 use super::{
     ApplicationState, CmdContext, EpisodeDetails, Result, SeriesDetails, SeriesState, SeriesStatus,
 };
 
-struct SeriesDetailsChanges {
-    in_production_change: Option<(bool, bool)>,
-    status_change: Option<(SeriesStatus, SeriesStatus)>,
-    next_episode_change: Option<(Option<EpisodeDetails>, Option<EpisodeDetails>)>,
-    episode_count_change: Option<(i32, i32)>,
+#[derive(Debug)]
+pub struct SeriesDetailsChanges {
+    pub id: SeriesId,
+    pub in_production_change: Option<(bool, bool)>,
+    pub status_change: Option<(SeriesStatus, SeriesStatus)>,
+    pub next_episode_change: Option<(Option<EpisodeDetails>, Option<EpisodeDetails>)>,
+    pub episode_count_change: Option<(i32, i32)>,
     // TODO: we should also check for episodes that have aired, as next_episode_to_air may change in bulk (e.g. on Netflix where a whole season is released all at once)
 }
 
 impl SeriesDetailsChanges {
-    fn has_any_changes(&self) -> bool {
+    pub fn new(id: SeriesId) -> SeriesDetailsChanges {
+        SeriesDetailsChanges {
+            id,
+            in_production_change: None,
+            status_change: None,
+            next_episode_change: None,
+            episode_count_change: None,
+        }
+    }
+
+    pub fn has_any_changes(&self) -> bool {
         self.in_production_change.is_some()
             || self.status_change.is_some()
             || self.next_episode_change.is_some()
@@ -24,13 +38,7 @@ fn collect_series_details_changes(
     new_details: &SeriesDetails,
 ) -> SeriesDetailsChanges {
     assert_eq!(old_details.id, new_details.id);
-
-    let mut changes = SeriesDetailsChanges {
-        in_production_change: None,
-        status_change: None,
-        next_episode_change: None,
-        episode_count_change: None,
-    };
+    let mut changes = SeriesDetailsChanges::new(new_details.id);
 
     if old_details.in_production != new_details.in_production {
         changes.in_production_change = Some((old_details.in_production, new_details.in_production));
@@ -81,7 +89,7 @@ pub fn update_one_series(
     ctx: &mut CmdContext,
     series_state: &mut SeriesState,
     force: bool,
-) -> Result<bool> {
+) -> Result<Option<SeriesDetailsChanges>> {
     fn get_update_frequency(series: &SeriesDetails) -> chrono::TimeDelta {
         match series.status {
             SeriesStatus::InProduction | SeriesStatus::ReturningSeries => {
@@ -98,7 +106,7 @@ pub fn update_one_series(
             series_state.details.identify(),
             series_state.timestamp
         );
-        return Ok(false);
+        return Ok(None);
     }
 
     let (changes, since_timestamp) = update_and_collect_changes(ctx, series_state)?;
@@ -109,7 +117,7 @@ pub fn update_one_series(
             "No changes to {} since last update at {since_timestamp}",
             series_state.details.identify()
         );
-        return Ok(false);
+        return Ok(None);
     }
 
     // TODO: by e-mail
@@ -120,13 +128,15 @@ pub fn update_one_series(
     if let Some((old_status, new_status)) = changes.status_change {
         println!(" - Status: {old_status} => {new_status}");
     }
-    if let Some((old_next_ep, new_next_ep)) = changes.next_episode_change {
+    if let Some((ref old_next_ep, ref new_next_ep)) = changes.next_episode_change {
         println!(
             " - Next episode: {} => {}",
             old_next_ep
+                .as_ref()
                 .map(|e| e.identify())
                 .unwrap_or("unknown".into()),
             new_next_ep
+                .as_ref()
                 .map(|e| e.identify())
                 .unwrap_or("unknown".into())
         );
@@ -135,17 +145,22 @@ pub fn update_one_series(
         println!(" - Episode count: {old_ep_count} => {new_ep_count}");
     }
 
-    Ok(true)
+    Ok(Some(changes))
 }
 
 pub fn update_all_series(
     ctx: &mut CmdContext,
     app_state: &mut ApplicationState,
     force: bool,
-) -> Result<()> {
+) -> Result<Vec<SeriesDetailsChanges>> {
+    let mut changes = Vec::with_capacity(app_state.tracked_series.len());
+
     for (_series_id, series_state) in app_state.tracked_series.iter_mut() {
         match update_one_series(ctx, series_state, force) {
-            Ok(_) => {}
+            Ok(None) => {}
+            Ok(Some(series_changes)) => {
+                changes.push(series_changes);
+            }
             Err(err) => {
                 eprintln!(
                     "Error while updating series {}: {err:?}",
@@ -155,5 +170,5 @@ pub fn update_all_series(
         }
     }
 
-    Ok(())
+    Ok(changes)
 }

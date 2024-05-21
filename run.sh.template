@@ -3,5 +3,10 @@
 export TMDB_API_KEY="<your key here>"
 export TMDB_API_ACCESS_TOKEN="<your token here>"
 
+export SMTP_HOST="<your value here>"
+export SMTP_PORT=0
+export SMTP_USER="<your username here>"
+export SMTP_PASSWORD="<your password here>"
+
 # see: https://stackoverflow.com/a/53214779
 cargo run "${@}"

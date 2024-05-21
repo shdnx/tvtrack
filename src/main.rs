@@ -1,4 +1,5 @@
 mod add;
+mod notify;
 mod result;
 mod state;
 mod tmdb;
@@ -7,6 +8,7 @@ mod update;
 use result::Result;
 use state::{ApplicationState, SeriesState};
 use tmdb::{EpisodeDetails, SeriesDetails, SeriesId, SeriesStatus};
+use update::SeriesDetailsChanges;
 
 struct CmdContext {
     tmdb_client: tmdb::Client,
@@ -67,7 +69,7 @@ fn main() -> Result<()> {
             add::add_all_series(&mut ctx, &mut app_state, file_path)?;
         }
         "u" | "update" => {
-            match args.get(1).map(|s| s.as_ref()) {
+            let all_changes = match args.get(1).map(|s| s.as_ref()) {
                 Some(series_id) if series_id.parse::<i32>().is_ok() => {
                     let series_id =
                         SeriesId(series_id.parse::<i32>().expect("Series ID to update"));
@@ -86,17 +88,24 @@ fn main() -> Result<()> {
                         .map(|a| a == "-f" || a == "--force")
                         .unwrap_or(false);
 
-                    update::update_one_series(&mut ctx, series_state, force)?;
+                    match update::update_one_series(&mut ctx, series_state, force)? {
+                        None => Vec::new(),
+                        Some(changes) => vec![changes],
+                    }
                 }
                 Some("-f") | Some("--force") => {
-                    update::update_all_series(&mut ctx, &mut app_state, true)?;
+                    update::update_all_series(&mut ctx, &mut app_state, true)?
                 }
                 Some(unknown_arg) => {
                     eprintln!("Error: unknown argument {unknown_arg}");
+                    return Ok(()); // TODO: should return an error
                 }
-                None => {
-                    update::update_all_series(&mut ctx, &mut app_state, false)?;
-                }
+                None => update::update_all_series(&mut ctx, &mut app_state, false)?,
+            };
+
+            // TODO: allow notifications to be only printed, for testing/debugging
+            if !all_changes.is_empty() {
+                notify::send_email_notifications(&ctx, all_changes)?;
             }
         }
         "h" | "help" | "-h" | "--help" => {
