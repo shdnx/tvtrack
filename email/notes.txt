@@ -1,0 +1,9 @@
+Considered e-mail sending services:
+- https://mailtrap.io/ selected
+- https://postmarkapp.com/ looks really good, but only 100 free e-mails per month, and the first paid tier is $15 / month for up to 15K e-mails which is excessive
+- https://www.mailjet.com/
+
+For e-mail templates:
+- https://app.postdrop.io/
+- https://github.com/leemunroe/responsive-html-email-template
+- CSS inliner: https://htmlemail.io/inline/

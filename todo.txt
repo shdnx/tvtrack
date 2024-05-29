@@ -1,2 +1,7 @@
  - we could also keep track of popular shows using https://developer.themoviedb.org/reference/movie-popular-list and send some recommendations based on that?
  - track releases on NCore as well?
+ - we could track changes via https://developer.themoviedb.org/reference/changes-tv-list but I think for now this would lead to having to many more requests than by just querying details directly
+ - switch to using SQLite instead of a state JSON file
+ - send e-mail notifications via SMTP for best compatibility (so we can switch providers easily if necessary)
+    TMDB posters for size 92 (see configuration for other possible sizes):
+    https://image.tmdb.org/t/p/w92{poster_path}?api_key={TMDB_API_KEY}
