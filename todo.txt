@@ -5,3 +5,4 @@
  - send e-mail notifications via SMTP for best compatibility (so we can switch providers easily if necessary)
     TMDB posters for size 92 (see configuration for other possible sizes):
     https://image.tmdb.org/t/p/w92{poster_path}?api_key={TMDB_API_KEY}
+ - replace run.sh and environment variables with a config file

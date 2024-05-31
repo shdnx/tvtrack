@@ -4,13 +4,15 @@ static API_ROOT_URL: &str = "https://api.themoviedb.org/3/";
 
 pub struct Client {
     agent: ureq::Agent,
+    api_key: String,
     api_access_token: String,
 }
 
 impl Client {
-    pub fn new(api_access_token: String) -> Client {
+    pub fn new(api_key: String, api_access_token: String) -> Client {
         Client {
             agent: ureq::AgentBuilder::new().build(),
+            api_key,
             api_access_token,
         }
     }
@@ -19,6 +21,19 @@ impl Client {
         self.agent.get(&format!("{API_ROOT_URL}{path}")).set(
             "Authorization",
             &format!("Bearer {}", self.api_access_token),
+        )
+    }
+
+    pub fn make_series_url(&self, id: SeriesId) -> String {
+        format!("https://www.themoviedb.org/tv/{id}")
+    }
+
+    pub fn make_poster_url(&self, poster_path: &str) -> String {
+        // TODO: we should be getting the base url and the image width closest to what we want from the TMDB API; see https://developer.themoviedb.org/docs/image-basics
+        // TODO: we should probably cache the poster image for series that are tracked, but that only works once this is public and/or has a domain associated with it
+        format!(
+            "https://image.tmdb.org/t/p/w92{}?api_key={}",
+            poster_path, self.api_key
         )
     }
 

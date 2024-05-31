@@ -30,6 +30,14 @@ fn print_help() {
 
 fn main() -> Result<()> {
     let state_file_path = "tvtrack.state.json"; // TODO: take optionally from command line arg?
+
+    let tmdb_api_key = match std::env::var("TMDB_API_KEY") {
+        Ok(val) => val,
+        Err(err) => {
+            eprintln!("Error: TMDB_API_KEY is not set or invalid");
+            return Err(err.into());
+        }
+    };
     let tmdb_api_token = match std::env::var("TMDB_API_ACCESS_TOKEN") {
         Ok(val) => val,
         Err(err) => {
@@ -40,7 +48,7 @@ fn main() -> Result<()> {
 
     let mut app_state = ApplicationState::read_from_or_new(state_file_path)?;
     let mut ctx = CmdContext {
-        tmdb_client: tmdb::Client::new(tmdb_api_token),
+        tmdb_client: tmdb::Client::new(tmdb_api_key, tmdb_api_token),
         now: chrono::Utc::now(), // optimization: take the time only once
         app_state_changed: false,
     };
@@ -105,7 +113,7 @@ fn main() -> Result<()> {
 
             // TODO: allow notifications to be only printed, for testing/debugging
             if !all_changes.is_empty() {
-                notify::send_email_notifications(&ctx, all_changes)?;
+                notify::send_email_notifications(&ctx, &app_state, all_changes)?;
             }
         }
         "h" | "help" | "-h" | "--help" => {

@@ -97,22 +97,22 @@ pub struct SeriesDetails {
     pub number_of_seasons: i32,
     pub number_of_episodes: i32,
 
-    //pub last_air_date: OptionalDate,
     pub last_episode_to_air: Option<EpisodeDetails>,
     pub next_episode_to_air: Option<EpisodeDetails>,
 
     pub status: SeriesStatus,
     pub in_production: bool,
+
+    pub poster_path: String,
 }
 
 impl SeriesDetails {
     pub fn identify(&self) -> String {
-        format!(
-            "[{}] {} ({})",
-            self.id,
-            self.name,
-            self.first_air_date.unwrap().year()
-        )
+        if let Some(first_air_date) = self.first_air_date.0 {
+            format!("[{}] {} ({})", self.id, self.name, first_air_date.year())
+        } else {
+            format!("[{}] {} (unreleased)", self.id, self.name)
+        }
     }
 
     pub fn next_episode_date(&self) -> Option<chrono::NaiveDate> {
