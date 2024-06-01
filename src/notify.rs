@@ -255,7 +255,7 @@ pub fn send_email_notifications(
         ctx.config.smtp.password.clone(),
     );
 
-    let mailer = SmtpTransport::relay(&ctx.config.smtp.host)
+    let mailer = SmtpTransport::starttls_relay(&ctx.config.smtp.host)
         .inspect_err(|e| {
             eprintln!("Failed to set up TLS for SMTP: {e:?}");
         })?
