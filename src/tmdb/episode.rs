@@ -23,8 +23,8 @@ pub enum EpisodeType {
 impl fmt::Display for EpisodeType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Standard => write!(f, "standard"),
-            Self::Finale => write!(f, "finale"),
+            Self::Standard => write!(f, "Standard"),
+            Self::Finale => write!(f, "Finale"),
         }
     }
 }

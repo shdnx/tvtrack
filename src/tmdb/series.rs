@@ -26,10 +26,10 @@ pub enum SeriesStatus {
 impl fmt::Display for SeriesStatus {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::InProduction => write!(f, "in production"),
-            Self::ReturningSeries => write!(f, "returning series"),
-            Self::Ended => write!(f, "ended"),
-            Self::Canceled => write!(f, "canceled"),
+            Self::InProduction => write!(f, "In Production"),
+            Self::ReturningSeries => write!(f, "Returning Series"),
+            Self::Ended => write!(f, "Ended"),
+            Self::Canceled => write!(f, "Canceled"),
         }
     }
 }

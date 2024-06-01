@@ -130,7 +130,10 @@ table[class=body] .article {
                 <table role="presentation" border="0" cellpadding="0" cellspacing="0" style="border-collapse: separate; mso-table-lspace: 0pt; mso-table-rspace: 0pt; min-width: 100%; width: 100%;" width="100%">
 "###.into();
 
-    for (series_state, series_changes) in all_changes.iter() {
+    for i in 0..all_changes.len() {
+        let (series_state, series_changes) = &all_changes[i];
+        let is_last = i == all_changes.len() - 1;
+
         let template = r###"
                     <tr>
                         <td class="series-poster" style="font-family: sans-serif; font-size: 14px; vertical-align: top; width: 110px;" width="110" valign="top">
@@ -140,17 +143,22 @@ table[class=body] .article {
                         <h3 class="series-title" style="color: #06090f; font-family: sans-serif; font-weight: 400; line-height: 1.4; margin: 0; margin-bottom: 7px;">
                             <a href="{{url}}" style="color: #ec0867; text-decoration: underline;">{{title}} ({{release_year}})</a>
                         </h3>
-                        <ul class="series-changes" style="font-family: sans-serif; font-size: 14px; font-weight: normal; margin: 0; padding: 0; margin-bottom: 30px;">
+                        <ul class="series-changes" style="font-family: sans-serif; font-size: 14px; font-weight: normal; margin: 0; padding: 0; margin-bottom: {{margin_bottom}}px;">
                             <li style="list-style-position: inside; margin-left: 5px;">{{in_production}}</li>
                             <li style="list-style-position: inside; margin-left: 5px;">{{status}}</li>
                             <li style="list-style-position: inside; margin-left: 5px;">Last: {{last_episode}}</li>
-                            <li style="list-style-position: inside; margin-left: 5px;">Next: {{next_episode}</li>
+                            <li style="list-style-position: inside; margin-left: 5px;">Next: {{next_episode}}</li>
                         </ul>
                         </td>
                     </tr>"###;
 
+        fn wrap_changed(text: &str) -> String {
+            format!(r#"<span style="color: #b6004c;">{}</span>"#, text)
+        }
+
         let series_html = template
             .to_string()
+            .replace("{{margin_bottom}}", if is_last { "0" } else { "30" })
             .replace("{{title}}", &series_state.details.name)
             .replace(
                 "{{release_year}}",
@@ -167,23 +175,25 @@ table[class=body] .article {
             )
             .replace(
                 "{{in_production}}",
-                match series_changes.in_production_change {
+                &match series_changes.in_production_change {
                     None => {
                         if series_state.details.in_production {
-                            "In production"
+                            "In production".to_owned()
                         } else {
-                            "Not in production"
+                            "Not in production".to_owned()
                         }
                     }
-                    Some((_, false)) => "No longer in production",
-                    Some((_, true)) => "Now in production",
+                    Some((_, false)) => wrap_changed("No longer in production"),
+                    Some((_, true)) => wrap_changed("Now in production"),
                 },
             )
             .replace(
                 "{{status}}",
                 &match series_changes.status_change {
                     None => series_state.details.status.to_string(),
-                    Some((old_status, new_status)) => format!("{old_status} &#8658; {new_status}"),
+                    Some((old_status, new_status)) => {
+                        wrap_changed(&format!("{old_status} &#8658; {new_status}"))
+                    }
                 },
             )
             .replace(
@@ -192,18 +202,23 @@ table[class=body] .article {
                     .details
                     .last_episode_to_air
                     .as_ref()
-                    .map(|last_ep| last_ep.identify())
+                    .map(|ep| ep.identify())
                     .unwrap_or("none".to_owned()),
             )
-            .replace(
-                "{{next_episode}}",
-                &series_state
+            .replace("{{next_episode}}", &{
+                let ep_info = series_state
                     .details
                     .next_episode_to_air
                     .as_ref()
-                    .map(|next_ep| next_ep.identify())
-                    .unwrap_or("none".to_owned()),
-            );
+                    .map(|ep| ep.identify())
+                    .unwrap_or("unknown".to_owned());
+
+                if series_changes.next_episode_change.is_some() {
+                    wrap_changed(&ep_info)
+                } else {
+                    ep_info
+                }
+            });
         html += &series_html;
     }
 
