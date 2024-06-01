@@ -1,4 +1,15 @@
- - we could also keep track of popular shows using https://developer.themoviedb.org/reference/movie-popular-list and send some recommendations based on that?
- - track releases on NCore as well?
- - we could track changes via https://developer.themoviedb.org/reference/changes-tv-list but I think for now this would lead to having to many more requests than by just querying details directly
- - switch to using SQLite instead of a state JSON file
+TODO:
+- switch to using SQLite instead of a state JSON file
+    allow multiple users, i.e. store users and which user is tracking which series
+    one update should get into the e-mail notification of every subscribing user
+- update all non-ended/cancelled series once per week, staggered throughout the week to minimize the impact on the API
+    but, only send the update summary e-mail once per week, since that is good enough for keeping track of changes
+    exception: if a new episode is released, then send an e-mail the day after (but a different kind of e-mail)
+- set it up to run as a scheduled service in a Docker container
+- make a web interface where each user can list / add / remove their tracked series
+    could also make a browser extension for adding series by clicking a button on the IMDB or TMDB website
+
+Potential ideas:
+- we could also keep track of popular shows using https://developer.themoviedb.org/reference/movie-popular-list and send some recommendations based on that?
+- track releases on NCore as well?
+- we could track changes via https://developer.themoviedb.org/reference/changes-tv-list but I think for now this would lead to having to many more requests than by just querying details directly
