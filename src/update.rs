@@ -76,11 +76,12 @@ fn update_and_collect_changes(
         .tmdb_client
         .get_series_details(series_state.details.id)?;
     let changes = collect_series_details_changes(&series_state.details, &new_details);
+    let old_timestamp = series_state.timestamp;
 
     series_state.details = new_details;
-
-    let old_timestamp = series_state.timestamp;
     series_state.timestamp = ctx.now;
+    series_state.next_update_timestamp = ctx.determine_next_update_timestamp(&series_state.details);
+    ctx.app_state_changed = true;
 
     Ok((changes, old_timestamp))
 }
@@ -90,17 +91,7 @@ pub fn update_one_series(
     series_state: &mut SeriesState,
     force: bool,
 ) -> Result<Option<SeriesDetailsChanges>> {
-    fn get_update_frequency(series: &SeriesDetails) -> chrono::TimeDelta {
-        match series.status {
-            SeriesStatus::InProduction | SeriesStatus::ReturningSeries => {
-                chrono::TimeDelta::days(3)
-            }
-            SeriesStatus::Canceled | SeriesStatus::Ended => chrono::TimeDelta::weeks(1),
-        }
-    }
-
-    let update_freq = get_update_frequency(&series_state.details);
-    if !force && ctx.now - series_state.timestamp < update_freq {
+    if !force && ctx.now < series_state.next_update_timestamp {
         println!(
             "Not updating {} because not enough time passed since last update at {}",
             series_state.details.identify(),
@@ -110,8 +101,6 @@ pub fn update_one_series(
     }
 
     let (changes, since_timestamp) = update_and_collect_changes(ctx, series_state)?;
-    ctx.app_state_changed = true; // since we updated the series details
-
     if !changes.has_any_changes() {
         println!(
             "No changes to {} since last update at {since_timestamp}",
@@ -120,7 +109,6 @@ pub fn update_one_series(
         return Ok(None);
     }
 
-    // TODO: by e-mail
     println!("Series {} changes:", series_state.details.identify());
     if let Some((old_in_prod, new_in_prod)) = changes.in_production_change {
         println!(" - In production: {old_in_prod} => {new_in_prod}");

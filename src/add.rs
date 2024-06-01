@@ -1,4 +1,4 @@
-use super::{ApplicationState, CmdContext, Result, SeriesId, SeriesState, SeriesStatus};
+use super::{ApplicationState, CmdContext, Result, SeriesId, SeriesState, EpisodeDetails};
 
 pub fn add_series(
     ctx: &mut CmdContext,
@@ -69,30 +69,22 @@ pub fn add_series_by_id(
         series_details.in_production, series_details.status
     );
 
-    if !series_details.in_production || series_details.status != SeriesStatus::ReturningSeries {
-        // TODO: notify
-    }
+    println!(
+        "-- Next episode: {}",
+        series_details
+            .next_episode_to_air
+            .as_ref()
+            .map(EpisodeDetails::identify)
+            .unwrap_or("unknown".to_owned())
+    );
 
-    if let Some(ref next_ep) = series_details.next_episode_to_air {
-        println!(
-            "-- Next episode: S{:02}E{:02} ({}) {} expected on {}",
-            next_ep.season_number,
-            next_ep.episode_number,
-            next_ep.episode_type,
-            next_ep.name,
-            next_ep.air_date
-        );
-
-        // TODO: notify
-    } else {
-        println!("-- Next episode: unknown");
-    }
-
+    let next_update_timestamp = ctx.determine_next_update_timestamp(&series_details);
     app_state.tracked_series.insert(
         series_details.id,
         SeriesState {
             details: series_details,
-            timestamp: chrono::Utc::now(),
+            timestamp: ctx.now,
+            next_update_timestamp,
         },
     );
     ctx.app_state_changed = true;

@@ -68,5 +68,8 @@ impl ApplicationState {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct SeriesState {
     pub details: tmdb::SeriesDetails,
+    /// The timestamp when this series was last updated
     pub timestamp: chrono::DateTime<chrono::Utc>,
+    /// The timestamp after which we should again poll this series for updates
+    pub next_update_timestamp: chrono::DateTime<chrono::Utc>,
 }

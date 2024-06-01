@@ -19,6 +19,21 @@ struct CmdContext {
     app_state_changed: bool,
 }
 
+impl CmdContext {
+    pub fn determine_next_update_timestamp(
+        &self,
+        series: &SeriesDetails,
+    ) -> chrono::DateTime<chrono::Utc> {
+        let update_freq = match series.status {
+            SeriesStatus::InProduction | SeriesStatus::ReturningSeries => {
+                chrono::TimeDelta::days(3)
+            }
+            SeriesStatus::Canceled | SeriesStatus::Ended => chrono::TimeDelta::weeks(1),
+        };
+        self.now + update_freq
+    }
+}
+
 fn print_help() {
     println!(
         r#"Available commands:
