@@ -1,6 +1,6 @@
 {
     "state_file_path": "tvtrack.state.json",
-    "imdb": {
+    "tmdb": {
         "api_key": "<your API key here>",
         "api_access_token": "<your API access token here>"
     },
