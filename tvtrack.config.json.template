@@ -1,0 +1,19 @@
+{
+    "state_file_path": "tvtrack.state.json",
+    "imdb": {
+        "api_key": "<your API key here>",
+        "api_access_token": "<your API access token here>"
+    },
+    "smtp": {
+        "host": "example.com",
+        "port": 25,
+        "user": "example",
+        "password": "example"
+    },
+    "emails": {
+        "from_name": "TVTrack",
+        "from_address": "tvtrack@example.com",
+        "to_name": "Mr Example",
+        "to_address": "mr@example.com"
+    }
+}

@@ -1,16 +1,19 @@
 mod add;
+mod config;
 mod notify;
 mod result;
 mod state;
 mod tmdb;
 mod update;
 
-use result::Result;
+use config::AppConfig;
+use result::{AnyError, Result};
 use state::{ApplicationState, SeriesState};
 use tmdb::{EpisodeDetails, SeriesDetails, SeriesId, SeriesStatus};
 use update::SeriesDetailsChanges;
 
 struct CmdContext {
+    config: AppConfig,
     tmdb_client: tmdb::Client,
     now: chrono::DateTime<chrono::Utc>,
     app_state_changed: bool,
@@ -29,28 +32,28 @@ fn print_help() {
 }
 
 fn main() -> Result<()> {
-    let state_file_path = "tvtrack.state.json"; // TODO: take optionally from command line arg?
+    // TODO: take optionally as a command line argument, only check env if that is not present
+    let config = std::env::var("TVTRACK_CONFIG_FILE")
+        .map_err(AnyError::from)
+        .and_then(config::AppConfig::try_read)
+        .inspect_err(|err| {
+            eprintln!("Error: TVTRACK_CONFIG_FILE references invalid file: {err:?}");
+        })?;
 
-    let tmdb_api_key = match std::env::var("TMDB_API_KEY") {
-        Ok(val) => val,
-        Err(err) => {
-            eprintln!("Error: TMDB_API_KEY is not set or invalid");
-            return Err(err.into());
-        }
-    };
-    let tmdb_api_token = match std::env::var("TMDB_API_ACCESS_TOKEN") {
-        Ok(val) => val,
-        Err(err) => {
-            eprintln!("Error: TMDB_API_ACCESS_TOKEN is not set or invalid");
-            return Err(err.into());
-        }
-    };
+    let mut app_state = ApplicationState::read_from_or_new(&config.state_file_path.0)?;
+    let mut ctx = {
+        // TODO: this is a bit ugly, just pass &config.tmdb instead?
+        let tmdb_client = tmdb::Client::new(
+            config.tmdb.api_key.clone(),
+            config.tmdb.api_access_token.clone(),
+        );
 
-    let mut app_state = ApplicationState::read_from_or_new(state_file_path)?;
-    let mut ctx = CmdContext {
-        tmdb_client: tmdb::Client::new(tmdb_api_key, tmdb_api_token),
-        now: chrono::Utc::now(), // optimization: take the time only once
-        app_state_changed: false,
+        CmdContext {
+            config,
+            tmdb_client,
+            now: chrono::Utc::now(), // used to ensure that all series update timestamps are exactly the same if they are updated together
+            app_state_changed: false,
+        }
     };
 
     let args = std::env::args().skip(1).collect::<Vec<_>>();
@@ -126,7 +129,7 @@ fn main() -> Result<()> {
     };
 
     if ctx.app_state_changed {
-        app_state.write_to(state_file_path)?;
+        app_state.write_to(&ctx.config.state_file_path.0)?;
     }
 
     Ok(())

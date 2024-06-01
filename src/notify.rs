@@ -1,5 +1,4 @@
 use crate::{
-    result::AnyError,
     state::{ApplicationState, SeriesState},
     tmdb, CmdContext, Result, SeriesDetailsChanges,
 };
@@ -228,23 +227,6 @@ table[class=body] .article {
     html
 }
 
-fn try_get_env_mailbox(env_var: &str) -> Result<Mailbox> {
-    std::env::var(env_var)
-        .map_err(AnyError::from)
-        .and_then(|s| s.parse().map_err(AnyError::from))
-        .inspect_err(|e| {
-            eprintln!("Invalid or missing env var {env_var}: {e:?}");
-        })
-}
-
-fn try_get_env_var(env_var: &str) -> Result<String> {
-    std::env::var(env_var)
-        .inspect_err(|e| {
-            eprintln!("Invalid or missing env var {env_var}: {e:?}");
-        })
-        .map_err(AnyError::from)
-}
-
 pub fn send_email_notifications(
     ctx: &CmdContext,
     app_state: &ApplicationState,
@@ -256,28 +238,28 @@ pub fn send_email_notifications(
         .collect::<Vec<_>>();
 
     let email = Message::builder()
-        .from(try_get_env_mailbox("EMAILS_FROM")?)
-        .to(try_get_env_mailbox("EMAILS_TO")?)
+        .from(Mailbox::new(
+            ctx.config.emails.from_name.clone(),
+            ctx.config.emails.from_address.parse()?,
+        ))
+        .to(Mailbox::new(
+            ctx.config.emails.to_name.clone(),
+            ctx.config.emails.to_address.parse()?,
+        ))
         .subject(format!("TVTrack updates {}", ctx.now.date_naive()))
         .header(ContentType::TEXT_HTML)
         .body(make_email_html(&ctx.tmdb_client, &changes))?;
 
     let credentials = Credentials::new(
-        try_get_env_var("SMTP_USER")?,
-        try_get_env_var("SMTP_PASSWORD")?,
+        ctx.config.smtp.user.clone(),
+        ctx.config.smtp.password.clone(),
     );
 
-    let mailer = SmtpTransport::relay(&try_get_env_var("SMTP_HOST")?)
+    let mailer = SmtpTransport::relay(&ctx.config.smtp.host)
         .inspect_err(|e| {
             eprintln!("Failed to set up TLS for SMTP: {e:?}");
         })?
-        .port(
-            try_get_env_var("SMTP_PORT")
-                .and_then(|port| port.parse().map_err(AnyError::from))
-                .inspect_err(|e| {
-                    eprintln!("Missing or invalid env var SMTP_PORT: {e:?}");
-                })?,
-        )
+        .port(ctx.config.smtp.port)
         .credentials(credentials)
         .build();
 

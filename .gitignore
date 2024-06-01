@@ -1,5 +1,5 @@
 /target
 tracked-series.txt
-run.sh
+tvtrack.config.json
 tvtrack.state.json
 /src/bin
