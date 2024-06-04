@@ -1,9 +1,14 @@
+use std::path::Path;
+
+use lettre::message::header::ContentType;
+
 use super::{Result, SearchResults, SeriesDetails, SeriesFound, SeriesId};
 
 static API_ROOT_URL: &str = "https://api.themoviedb.org/3/";
 
 pub struct Client {
     agent: ureq::Agent,
+    #[allow(dead_code)]
     api_key: String,
     api_access_token: String,
 }
@@ -28,13 +33,44 @@ impl Client {
         format!("https://www.themoviedb.org/tv/{id}")
     }
 
-    pub fn make_poster_url(&self, poster_path: &str) -> String {
+    // TODO: move somewhere else
+    pub fn try_determine_mime_type(path: &str) -> Result<&'static str> {
+        let ext = Path::new(path)
+            .extension()
+            .and_then(|ext| ext.to_str())
+            .expect("File path does not have a valid extension");
+
+        match ext {
+            "jpg" | "jpeg" => Ok("image/jpeg"),
+            "png" => Ok("image/png"),
+            _ => Err(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                format!(
+                    "Could not determine MIME type for path {path} with unknown extension {ext}"
+                ),
+            )
+            .into()),
+        }
+    }
+
+    pub fn get_poster(&self, path: &str) -> Result<(Box<[u8]>, &'static str)> {
         // TODO: we should be getting the base url and the image width closest to what we want from the TMDB API; see https://developer.themoviedb.org/docs/image-basics
-        // TODO: we should probably cache the poster image for series that are tracked, but that only works once this is public and/or has a domain associated with it
-        format!(
-            "https://image.tmdb.org/t/p/w92{}?api_key={}",
-            poster_path, self.api_key
-        )
+        let url = format!("https://image.tmdb.org/t/p/w92{path}");
+        let mime_type = Self::try_determine_mime_type(path)?;
+
+        let mut buf = vec![];
+        self.agent
+            .get(&url)
+            .set(
+                "Authorization",
+                &format!("Bearer {}", self.api_access_token),
+            )
+            .set("Accept", mime_type)
+            .call()?
+            .into_reader()
+            .read_to_end(&mut buf)?;
+
+        Ok((buf.into_boxed_slice(), mime_type))
     }
 
     pub fn search_series(

@@ -1,6 +1,7 @@
 TODO:
 - switch to using SQLite instead of a state JSON file
     allow multiple users, i.e. store users and which user is tracking which series
+    store also the series poster images in the database instead of in the filesystem
     one update should get into the e-mail notification of every subscribing user
 - update all non-ended/cancelled series once per week, staggered throughout the week to minimize the impact on the API
     but, only send the update summary e-mail once per week, since that is good enough for keeping track of changes
@@ -8,6 +9,7 @@ TODO:
 - set it up to run as a scheduled service in a Docker container
 - make a web interface where each user can list / add / remove their tracked series
     could also make a browser extension for adding series by clicking a button on the IMDB or TMDB website
+- also keep track of unreleased movies and notify when they come out
 
 Potential ideas:
 - we could also keep track of popular shows using https://developer.themoviedb.org/reference/movie-popular-list and send some recommendations based on that?

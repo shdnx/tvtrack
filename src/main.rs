@@ -131,7 +131,7 @@ fn main() -> Result<()> {
 
             // TODO: allow notifications to be only printed, for testing/debugging
             if !all_changes.is_empty() {
-                notify::send_email_notifications(&ctx, &app_state, all_changes)?;
+                notify::send_email_notifications(&mut ctx, &app_state, all_changes)?;
             }
         }
         "h" | "help" | "-h" | "--help" => {

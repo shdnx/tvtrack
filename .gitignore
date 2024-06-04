@@ -3,3 +3,4 @@ tracked-series.txt
 tvtrack.config.json
 tvtrack.state.json
 /src/bin
+/posters-cache

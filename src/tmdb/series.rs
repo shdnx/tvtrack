@@ -120,4 +120,10 @@ impl SeriesDetails {
             .as_ref()
             .and_then(|ep| ep.air_date.0)
     }
+
+    pub fn poster_extension(&self) -> Option<&str> {
+        std::path::Path::new(&self.poster_path)
+            .extension()
+            .and_then(|ext| ext.to_str())
+    }
 }

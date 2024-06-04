@@ -1,18 +1,69 @@
+use std::io::Read;
+
 use crate::{
     state::{ApplicationState, SeriesState},
-    tmdb, CmdContext, Result, SeriesDetailsChanges,
+    tmdb::{self, SeriesDetails},
+    CmdContext, Result, SeriesDetailsChanges,
 };
 use chrono::Datelike;
 use lettre::{
-    message::{header::ContentType, Mailbox},
+    message::{header::ContentType, Attachment, Mailbox, MultiPart, SinglePart},
     transport::smtp::authentication::Credentials,
     Message, SmtpTransport, Transport,
 };
 
-fn make_email_html(
-    client: &tmdb::Client,
-    all_changes: &[(&SeriesState, SeriesDetailsChanges)],
-) -> String {
+fn fetch_poster_image(
+    ctx: &mut CmdContext,
+    series: &SeriesDetails,
+) -> Result<(Box<[u8]>, ContentType)> {
+    // TODO: once we switch to SQLite, store the images inside
+    let file_ext = series
+        .poster_extension()
+        .expect("Poster path without valid extension?");
+
+    let cache_dir_path = "posters-cache";
+    let cache_file_path = format!("{cache_dir_path}/{}.{file_ext}", series.id);
+
+    match std::fs::create_dir(cache_dir_path) {
+        Ok(()) => (),
+        Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => (),
+        // TODO: is this a good way?
+        Err(err) => {
+            return Err(std::io::Error::other(format!(
+                "Posters cache directory could not be created: {err}"
+            ))
+            .into())
+        }
+    };
+
+    let (data, mime_type) = match std::fs::File::open(&cache_file_path) {
+        Ok(mut file) => {
+            let mut data: Vec<u8> = vec![];
+            file.read_to_end(&mut data)?;
+
+            let mime_type = tmdb::Client::try_determine_mime_type(&cache_file_path)?;
+            (data.into_boxed_slice(), mime_type)
+        }
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
+            let (data, mime_type) = ctx.tmdb_client.get_poster(&series.poster_path)?;
+            std::fs::write(cache_file_path, &data)?;
+            (data, mime_type)
+        }
+        Err(err) => return Err(err.into()), // TODO: ugh
+    };
+
+    let content_type = ContentType::parse(mime_type).expect("Invalid MIME type");
+    Ok((data, content_type))
+}
+
+struct SeriesEntry<'a> {
+    pub state: &'a SeriesState,
+    pub changes: SeriesDetailsChanges,
+    pub url: String,
+    pub poster_url: String,
+}
+
+fn make_email_html(entries: &[SeriesEntry]) -> String {
     // TODO: use some kind of templating?
     let mut html: String = r###"<!doctype html>
 <html>
@@ -130,9 +181,14 @@ table[class=body] .article {
                 <table role="presentation" border="0" cellpadding="0" cellspacing="0" style="border-collapse: separate; mso-table-lspace: 0pt; mso-table-rspace: 0pt; min-width: 100%; width: 100%;" width="100%">
 "###.into();
 
-    for i in 0..all_changes.len() {
-        let (series_state, series_changes) = &all_changes[i];
-        let is_last = i == all_changes.len() - 1;
+    for i in 0..entries.len() {
+        let SeriesEntry {
+            state: series_state,
+            changes: series_changes,
+            url: series_url,
+            poster_url,
+        } = &entries[i];
+        let is_last = i == entries.len() - 1;
 
         let template = r###"
                     <tr>
@@ -168,11 +224,8 @@ table[class=body] .article {
                     .map(|dt| dt.year().to_string())
                     .unwrap_or("unreleased".to_owned()),
             )
-            .replace("{{url}}", &client.make_series_url(series_state.details.id))
-            .replace(
-                "{{poster_url}}",
-                &client.make_poster_url(&series_state.details.poster_path),
-            )
+            .replace("{{url}}", &series_url)
+            .replace("{{poster_url}}", &poster_url)
             .replace(
                 "{{in_production}}",
                 &match series_changes.in_production_change {
@@ -243,13 +296,31 @@ table[class=body] .article {
 }
 
 pub fn send_email_notifications(
-    ctx: &CmdContext,
+    ctx: &mut CmdContext,
     app_state: &ApplicationState,
     changes: Vec<SeriesDetailsChanges>,
 ) -> Result<()> {
-    let changes = changes
+    // NOTE: we are using CIDs to attach the poster image data inline with the e-mail
+    // this is because we don't have a simple GET url for them without leaking our TMDB API key
+    // however, some e-mail clients don't like CIDs and prefer external images
+    // that is only feasible if we have hosting and a CDN set up though
+    // reading on CIDs:
+    // - https://mailtrap.io/blog/embedding-images-in-html-email-have-the-rules-changed/
+    // - https://stackoverflow.com/a/40420648/128240
+    // - https://users.rust-lang.org/t/add-attachment-to-message-builder-in-lettre-email-sender/68471
+
+    let entries = changes
         .into_iter()
-        .map(|c| (app_state.tracked_series.get(&c.id).unwrap(), c))
+        .map(|changes| {
+            let id = changes.id;
+            let state = app_state.tracked_series.get(&id).unwrap();
+            SeriesEntry {
+                state,
+                changes,
+                url: ctx.tmdb_client.make_series_url(id),
+                poster_url: format!("cid:{id}.{}", state.details.poster_extension().unwrap()),
+            }
+        })
         .collect::<Vec<_>>();
 
     let email = Message::builder()
@@ -262,8 +333,28 @@ pub fn send_email_notifications(
             ctx.config.emails.to_address.parse()?,
         ))
         .subject(format!("TVTrack updates {}", ctx.now.date_naive()))
-        .header(ContentType::TEXT_HTML)
-        .body(make_email_html(&ctx.tmdb_client, &changes))?;
+        .multipart(MultiPart::mixed().multipart({
+            let mut multipart = MultiPart::related().singlepart(
+                SinglePart::builder()
+                    .header(ContentType::TEXT_HTML)
+                    .body(make_email_html(&entries)),
+            );
+
+            for SeriesEntry { state, .. } in entries.iter() {
+                let (poster_data, poster_content_type) = fetch_poster_image(ctx, &state.details)?;
+                let cid_id = format!(
+                    "{}.{}",
+                    state.details.id,
+                    state.details.poster_extension().unwrap()
+                ); // TODO: duplication between this and entry.poster_url
+
+                let attachment = Attachment::new_inline(cid_id)
+                    .body(Vec::from(poster_data), poster_content_type);
+                multipart = multipart.singlepart(attachment);
+            }
+
+            multipart
+        }))?;
 
     let credentials = Credentials::new(
         ctx.config.smtp.user.clone(),
