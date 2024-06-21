@@ -3,8 +3,9 @@ use std::io::Read;
 use crate::{
     state::{ApplicationState, SeriesState},
     tmdb::{self, SeriesDetails},
-    CmdContext, Result, SeriesDetailsChanges,
+    CmdContext, SeriesDetailsChanges,
 };
+use anyhow::{bail, Context};
 use chrono::Datelike;
 use lettre::{
     message::{header::ContentType, Attachment, Mailbox, MultiPart, SinglePart},
@@ -15,7 +16,7 @@ use lettre::{
 fn fetch_poster_image(
     ctx: &mut CmdContext,
     series: &SeriesDetails,
-) -> Result<(Box<[u8]>, ContentType)> {
+) -> anyhow::Result<(Box<[u8]>, ContentType)> {
     // TODO: once we switch to SQLite, store the images inside
     let file_ext = series
         .poster_extension()
@@ -28,28 +29,25 @@ fn fetch_poster_image(
         Ok(()) => (),
         Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => (),
         // TODO: is this a good way?
-        Err(err) => {
-            return Err(std::io::Error::other(format!(
-                "Posters cache directory could not be created: {err}"
-            ))
-            .into())
-        }
+        Err(err) => bail!("Posters cache directory could not be created: {err}"),
     };
 
     let (data, mime_type) = match std::fs::File::open(&cache_file_path) {
         Ok(mut file) => {
             let mut data: Vec<u8> = vec![];
-            file.read_to_end(&mut data)?;
+            file.read_to_end(&mut data)
+                .with_context(|| format!("Reading poster cache file {cache_file_path}"))?;
 
             let mime_type = tmdb::Client::try_determine_mime_type(&cache_file_path)?;
             (data.into_boxed_slice(), mime_type)
         }
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
             let (data, mime_type) = ctx.tmdb_client.get_poster(&series.poster_path)?;
-            std::fs::write(cache_file_path, &data)?;
+            std::fs::write(&cache_file_path, &data)
+                .with_context(|| format!("Writing poster cache file {cache_file_path}"))?;
             (data, mime_type)
         }
-        Err(err) => return Err(err.into()), // TODO: ugh
+        Err(err) => return Err(err.into()),
     };
 
     let content_type = ContentType::parse(mime_type).expect("Invalid MIME type");
@@ -299,7 +297,7 @@ pub fn send_email_notifications(
     ctx: &mut CmdContext,
     app_state: &ApplicationState,
     changes: Vec<SeriesDetailsChanges>,
-) -> Result<()> {
+) -> anyhow::Result<()> {
     // NOTE: we are using CIDs to attach the poster image data inline with the e-mail
     // this is because we don't have a simple GET url for them without leaking our TMDB API key
     // however, some e-mail clients don't like CIDs and prefer external images
@@ -362,15 +360,13 @@ pub fn send_email_notifications(
     );
 
     let mailer = SmtpTransport::starttls_relay(&ctx.config.smtp.host)
-        .inspect_err(|e| {
-            eprintln!("Failed to set up TLS for SMTP: {e:?}");
-        })?
+        .context("Setting up STARTTLS for SMTP")?
         .port(ctx.config.smtp.port)
         .credentials(credentials)
         .build();
 
-    mailer.send(&email).inspect_err(|e| {
-        eprintln!("Failed to send e-mail via SMTP: {e:?}");
-    })?;
+    mailer
+        .send(&email)
+        .context("Sending e-mail notifications via SMTP")?;
     Ok(())
 }

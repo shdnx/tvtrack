@@ -1,7 +1,7 @@
 use crate::tmdb::SeriesId;
 
 use super::{
-    ApplicationState, CmdContext, EpisodeDetails, Result, SeriesDetails, SeriesState, SeriesStatus,
+    ApplicationState, CmdContext, EpisodeDetails, SeriesDetails, SeriesState, SeriesStatus,
 };
 
 #[derive(Debug)]
@@ -71,7 +71,7 @@ fn collect_series_details_changes(
 fn update_and_collect_changes(
     ctx: &mut CmdContext,
     series_state: &mut SeriesState,
-) -> Result<(SeriesDetailsChanges, chrono::DateTime<chrono::Utc>)> {
+) -> anyhow::Result<(SeriesDetailsChanges, chrono::DateTime<chrono::Utc>)> {
     let new_details = ctx
         .tmdb_client
         .get_series_details(series_state.details.id)?;
@@ -90,7 +90,7 @@ pub fn update_one_series(
     ctx: &mut CmdContext,
     series_state: &mut SeriesState,
     force: bool,
-) -> Result<Option<SeriesDetailsChanges>> {
+) -> anyhow::Result<Option<SeriesDetailsChanges>> {
     if !force && ctx.now < series_state.next_update_timestamp {
         println!(
             "Not updating {} because not enough time passed since last update at {}",
@@ -140,7 +140,7 @@ pub fn update_all_series(
     ctx: &mut CmdContext,
     app_state: &mut ApplicationState,
     force: bool,
-) -> Result<Vec<SeriesDetailsChanges>> {
+) -> anyhow::Result<Vec<SeriesDetailsChanges>> {
     let mut changes = Vec::with_capacity(app_state.tracked_series.len());
 
     for (_series_id, series_state) in app_state.tracked_series.iter_mut() {

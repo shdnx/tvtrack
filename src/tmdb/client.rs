@@ -1,8 +1,9 @@
 use std::path::Path;
 
+use anyhow::{anyhow, Context};
 use lettre::message::header::ContentType;
 
-use super::{Result, SearchResults, SeriesDetails, SeriesFound, SeriesId};
+use super::{SearchResults, SeriesDetails, SeriesFound, SeriesId};
 
 static API_ROOT_URL: &str = "https://api.themoviedb.org/3/";
 
@@ -34,26 +35,22 @@ impl Client {
     }
 
     // TODO: move somewhere else
-    pub fn try_determine_mime_type(path: &str) -> Result<&'static str> {
+    pub fn try_determine_mime_type(path: &str) -> anyhow::Result<&'static str> {
         let ext = Path::new(path)
             .extension()
             .and_then(|ext| ext.to_str())
-            .expect("File path does not have a valid extension");
+            .with_context(|| format!("File path {path} does not have a valid extension"))?;
 
         match ext {
             "jpg" | "jpeg" => Ok("image/jpeg"),
             "png" => Ok("image/png"),
-            _ => Err(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!(
-                    "Could not determine MIME type for path {path} with unknown extension {ext}"
-                ),
-            )
-            .into()),
+            _ => Err(anyhow!(
+                "Could not determine MIME type for path {path} with unknown extension {ext}"
+            )),
         }
     }
 
-    pub fn get_poster(&self, path: &str) -> Result<(Box<[u8]>, &'static str)> {
+    pub fn get_poster(&self, path: &str) -> anyhow::Result<(Box<[u8]>, &'static str)> {
         // TODO: we should be getting the base url and the image width closest to what we want from the TMDB API; see https://developer.themoviedb.org/docs/image-basics
         let url = format!("https://image.tmdb.org/t/p/w92{path}");
         let mime_type = Self::try_determine_mime_type(path)?;
@@ -66,7 +63,8 @@ impl Client {
                 &format!("Bearer {}", self.api_access_token),
             )
             .set("Accept", mime_type)
-            .call()?
+            .call()
+            .with_context(|| format!("TMDB::get_poster({path:?})"))?
             .into_reader()
             .read_to_end(&mut buf)?;
 
@@ -77,7 +75,7 @@ impl Client {
         &mut self,
         title: &str,
         first_air_year: Option<i32>,
-    ) -> Result<SearchResults<SeriesFound>> {
+    ) -> anyhow::Result<SearchResults<SeriesFound>> {
         let result_json = {
             let mut query = self
                 .get("search/tv")
@@ -88,27 +86,32 @@ impl Client {
                 query = query.query("first_air_date_year", &year.to_string());
             }
 
-            query.call()?.into_string()?
+            query
+                .call()
+                .with_context(|| format!("TMDB::search_series({title:?}, {first_air_year:?})"))?
+                .into_string()?
         };
 
-        serde_json::from_str::<SearchResults<SeriesFound>>(&result_json).map_err(|json_err| {
-            println!(
-                "search_series {title} failed to parse JSON response: {json_err:?} {}",
+        serde_json::from_str::<SearchResults<SeriesFound>>(&result_json).with_context(|| {
+            format!(
+                "TMDB::search_series({title:?}, {first_air_year:?}) JSON parse error: {}",
                 &result_json
-            );
-            super::Error::from(json_err)
+            )
         })
     }
 
-    pub fn get_series_details(&mut self, id: SeriesId) -> Result<SeriesDetails> {
-        let result_json = self.get(&format!("tv/{id}")).call()?.into_string()?;
+    pub fn get_series_details(&mut self, id: SeriesId) -> anyhow::Result<SeriesDetails> {
+        let result_json = self
+            .get(&format!("tv/{id}"))
+            .call()
+            .with_context(|| format!("TMDB::get_series_details({id})"))?
+            .into_string()?;
 
-        serde_json::from_str::<SeriesDetails>(&result_json).map_err(|json_err| {
-            println!(
-                "get_series_details {id} failed to parse JSON response: {json_err:?} {}",
+        serde_json::from_str::<SeriesDetails>(&result_json).with_context(|| {
+            format!(
+                "TMDB::get_series_details({id}) JSON parse error: {}",
                 &result_json
-            );
-            super::Error::from(json_err)
+            )
         })
     }
 }

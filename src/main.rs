@@ -1,13 +1,12 @@
 mod add;
 mod config;
 mod notify;
-mod result;
 mod state;
 mod tmdb;
 mod update;
 
+use anyhow::bail;
 use config::AppConfig;
-use result::{AnyError, Result};
 use state::{ApplicationState, SeriesState};
 use tmdb::{EpisodeDetails, SeriesDetails, SeriesId, SeriesStatus};
 use update::SeriesDetailsChanges;
@@ -46,14 +45,12 @@ fn print_help() {
     );
 }
 
-fn main() -> Result<()> {
+fn main() -> anyhow::Result<()> {
     // TODO: take optionally as a command line argument, only check env if that is not present
-    let config = std::env::var("TVTRACK_CONFIG_FILE")
-        .map_err(AnyError::from)
-        .and_then(config::AppConfig::try_read)
-        .inspect_err(|err| {
-            eprintln!("Error: TVTRACK_CONFIG_FILE references invalid file: {err:?}");
-        })?;
+    let config = {
+        let file_path = std::env::var("TVTRACK_CONFIG_FILE").expect("TVTRACK_CONFIG_FILE not set");
+        config::AppConfig::try_read(file_path)?
+    };
 
     let mut app_state = ApplicationState::read_from_or_new(&config.state_file_path.0)?;
     let mut ctx = {
@@ -100,12 +97,8 @@ fn main() -> Result<()> {
                     let series_id =
                         SeriesId(series_id.parse::<i32>().expect("Series ID to update"));
 
-                    let series_state = match app_state.tracked_series.get_mut(&series_id) {
-                        Some(s) => s,
-                        None => {
-                            eprintln!("Error: no tracked series with ID {series_id}");
-                            return Ok(()); // TODO: should return an error
-                        }
+                    let Some(series_state) = app_state.tracked_series.get_mut(&series_id) else {
+                        bail!("No tracked series with ID {series_id}")
                     };
 
                     // TODO: not great arg handling
@@ -122,10 +115,7 @@ fn main() -> Result<()> {
                 Some("-f") | Some("--force") => {
                     update::update_all_series(&mut ctx, &mut app_state, true)?
                 }
-                Some(unknown_arg) => {
-                    eprintln!("Error: unknown argument {unknown_arg}");
-                    return Ok(()); // TODO: should return an error
-                }
+                Some(unknown_arg) => bail!("Unknown argument {unknown_arg}"),
                 None => update::update_all_series(&mut ctx, &mut app_state, false)?,
             };
 

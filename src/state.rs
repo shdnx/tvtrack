@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
+use anyhow::Context;
 use serde::{Deserialize, Serialize};
 
-use crate::result::Result as AnyResult;
 use crate::tmdb;
 
 #[derive(Debug, Default)]
@@ -23,7 +23,7 @@ impl ApplicationState {
     }
 
     /// Read the state file from the specified path if it exists, otherwise return a new (empty) one.
-    pub fn read_from_or_new(file_path: &str) -> AnyResult<ApplicationState> {
+    pub fn read_from_or_new(file_path: &str) -> anyhow::Result<ApplicationState> {
         match std::fs::read_to_string(file_path) {
             Ok(state_str) => {
                 println!("Loading state file {file_path}");
@@ -34,14 +34,15 @@ impl ApplicationState {
                 println!("Note: state file {file_path} does not exist, loading empty state");
                 Ok(ApplicationState::new())
             }
-            Err(err) => Err(err.into()),
+            Err(err) => Err(err).with_context(|| format!("Reading state file {file_path:?}")),
         }
     }
 
-    pub fn write_to(&self, file_path: &str) -> AnyResult<()> {
-        let state_str = serde_json::to_string_pretty(&self.to_json())?;
-        std::fs::write(file_path, state_str)?;
-        Ok(())
+    pub fn write_to(&self, file_path: &str) -> anyhow::Result<()> {
+        let state_str =
+            serde_json::to_string_pretty(&self.to_json()).context("Serializing state")?;
+        std::fs::write(file_path, state_str)
+            .with_context(|| format!("Writing state to {file_path}"))
     }
 
     fn to_json(&self) -> JsonApplicationState {

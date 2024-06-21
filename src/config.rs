@@ -1,6 +1,4 @@
-use crate::Result;
-use std::path::Path;
-
+use anyhow::Context;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -23,10 +21,11 @@ pub struct AppConfig {
 }
 
 impl AppConfig {
-    pub fn try_read(file_path: impl AsRef<Path>) -> Result<AppConfig> {
-        Ok(serde_json::from_str::<AppConfig>(
-            &std::fs::read_to_string(file_path)?,
-        )?)
+    pub fn try_read(file_path: String) -> anyhow::Result<AppConfig> {
+        let json = &std::fs::read_to_string(&file_path)
+            .with_context(|| format!("Reading config file {file_path:?}"))?;
+        serde_json::from_str::<AppConfig>(json)
+            .with_context(|| format!("Parsing JSON config file {file_path:?}"))
     }
 }
 

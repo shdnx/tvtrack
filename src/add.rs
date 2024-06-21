@@ -1,11 +1,11 @@
-use super::{ApplicationState, CmdContext, Result, SeriesId, SeriesState, EpisodeDetails};
+use super::{ApplicationState, CmdContext, EpisodeDetails, SeriesId, SeriesState};
 
 pub fn add_series(
     ctx: &mut CmdContext,
     app_state: &mut ApplicationState,
     title: &str,
     first_air_year: Option<i32>,
-) -> Result<bool> {
+) -> anyhow::Result<bool> {
     println!(
         "Add series: {title}{}",
         first_air_year
@@ -54,7 +54,7 @@ pub fn add_series_by_id(
     ctx: &mut CmdContext,
     app_state: &mut ApplicationState,
     id: SeriesId,
-) -> Result<bool> {
+) -> anyhow::Result<bool> {
     println!("Adding series by id: {id}");
 
     if app_state.tracked_series.contains_key(&id) {
@@ -96,14 +96,13 @@ pub fn add_all_series(
     ctx: &mut CmdContext,
     app_state: &mut ApplicationState,
     file_path: &str,
-) -> Result<()> {
+) -> anyhow::Result<()> {
     println!("Adding all series from file: {file_path}");
 
     // Allow the line to optionally end in the release (first air) year in parens, e.g. (2024).
     fn parse_line(line: &str) -> (&str, Option<i32>) {
-        let (title, maybe_year) = match line.trim().rsplit_once(' ') {
-            Some(r) => r,
-            None => return (line.trim(), None),
+        let Some((title, maybe_year)) = line.trim().rsplit_once(' ') else {
+            return (line.trim(), None);
         };
 
         if !maybe_year.starts_with('(') || !maybe_year.ends_with(')') {
