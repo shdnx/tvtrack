@@ -1,5 +1,7 @@
 use std::{cmp, fmt};
 
+use rusqlite::types::{FromSql, ToSql};
+
 /// Mostly equivalent to `Option<chrono::NaiveDate>` except in JSON parses an empty string to `None`.
 /// This is needed because TMDB will send empty strings for missing dates instead of `null`.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -76,5 +78,17 @@ impl std::ops::Deref for OptionalDate {
 
     fn deref(&self) -> &Self::Target {
         &self.0
+    }
+}
+
+impl ToSql for OptionalDate {
+    fn to_sql(&self) -> rusqlite::Result<rusqlite::types::ToSqlOutput<'_>> {
+        self.0.to_sql()
+    }
+}
+
+impl FromSql for OptionalDate {
+    fn column_result(value: rusqlite::types::ValueRef<'_>) -> rusqlite::types::FromSqlResult<Self> {
+        <Option<chrono::NaiveDate> as FromSql>::column_result(value).map(OptionalDate)
     }
 }

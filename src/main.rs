@@ -4,6 +4,7 @@ mod notify;
 mod state;
 mod tmdb;
 mod update;
+mod poster;
 
 use anyhow::bail;
 use config::AppConfig;
@@ -49,7 +50,7 @@ fn main() -> anyhow::Result<()> {
     // TODO: take optionally as a command line argument, only check env if that is not present
     let config = {
         let file_path = std::env::var("TVTRACK_CONFIG_FILE").expect("TVTRACK_CONFIG_FILE not set");
-        config::AppConfig::try_read(file_path)?
+        config::AppConfig::try_read(&file_path)?
     };
 
     let mut app_state = ApplicationState::read_from_or_new(&config.state_file_path.0)?;

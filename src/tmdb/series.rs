@@ -1,6 +1,8 @@
 use chrono::Datelike;
+use rusqlite::types::{FromSql, ToSql};
 use serde::{Deserialize, Serialize};
 use std::fmt;
+use strum::{VariantArray, VariantNames};
 
 use super::{EpisodeDetails, OptionalDate};
 
@@ -13,25 +15,32 @@ impl fmt::Display for SeriesId {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+impl ToSql for SeriesId {
+    fn to_sql(&self) -> rusqlite::Result<rusqlite::types::ToSqlOutput<'_>> {
+        self.0.to_sql()
+    }
+}
+
+impl FromSql for SeriesId {
+    fn column_result(value: rusqlite::types::ValueRef<'_>) -> rusqlite::types::FromSqlResult<Self> {
+        <i32 as FromSql>::column_result(value).map(SeriesId)
+    }
+}
+
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, strum::Display, strum::EnumString, strum::VariantNames,
+)]
 pub enum SeriesStatus {
     /// This seems to be used to mean yet-unreleased series only.
     /// Note that there's also `SeriesDetails::in_production`
+    #[strum(to_string = "In Production")]
     InProduction,
+
+    #[strum(to_string = "Returning Series")]
     ReturningSeries,
+
     Ended,
     Canceled,
-}
-
-impl fmt::Display for SeriesStatus {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::InProduction => write!(f, "In Production"),
-            Self::ReturningSeries => write!(f, "Returning Series"),
-            Self::Ended => write!(f, "Ended"),
-            Self::Canceled => write!(f, "Canceled"),
-        }
-    }
 }
 
 impl Serialize for SeriesStatus {
@@ -39,12 +48,7 @@ impl Serialize for SeriesStatus {
     where
         S: serde::Serializer,
     {
-        match self {
-            Self::InProduction => s.serialize_str("In Production"),
-            Self::ReturningSeries => s.serialize_str("Returning Series"),
-            Self::Ended => s.serialize_str("Ended"),
-            Self::Canceled => s.serialize_str("Canceled"),
-        }
+        s.serialize_str(&self.to_string())
     }
 }
 
@@ -59,30 +63,34 @@ impl<'de> Deserialize<'de> for SeriesStatus {
             type Value = SeriesStatus;
 
             fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
-                write!(
-                    f,
-                    "One of 'In Production', 'Returning Series', 'Canceled', or 'Ended'"
-                )
+                write!(f, "A valid SeriesStatus")
             }
 
             fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
             where
                 E: serde::de::Error,
             {
-                match v {
-                    "In Production" => Ok(SeriesStatus::InProduction),
-                    "Returning Series" => Ok(SeriesStatus::ReturningSeries),
-                    "Canceled" => Ok(SeriesStatus::Canceled),
-                    "Ended" => Ok(SeriesStatus::Ended),
-                    val => Err(serde::de::Error::unknown_variant(
-                        val,
-                        &["In Production", "Returning Series", "Canceled", "Ended"],
-                    )),
-                }
+                v.parse::<SeriesStatus>()
+                    .map_err(|_| serde::de::Error::unknown_variant(v, SeriesStatus::VARIANTS))
             }
         }
 
         d.deserialize_str(Visitor)
+    }
+}
+
+impl ToSql for SeriesStatus {
+    fn to_sql(&self) -> rusqlite::Result<rusqlite::types::ToSqlOutput<'_>> {
+        Ok(self.to_string().into())
+    }
+}
+
+impl FromSql for SeriesStatus {
+    fn column_result(value: rusqlite::types::ValueRef<'_>) -> rusqlite::types::FromSqlResult<Self> {
+        value
+            .as_str()?
+            .parse()
+            .map_err(|e| rusqlite::types::FromSqlError::Other(Box::new(e)))
     }
 }
 

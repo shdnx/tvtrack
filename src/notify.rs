@@ -1,58 +1,14 @@
-use std::io::Read;
-
 use crate::{
     state::{ApplicationState, SeriesState},
-    tmdb::{self, SeriesDetails},
     CmdContext, SeriesDetailsChanges,
 };
-use anyhow::{bail, Context};
+use anyhow::Context;
 use chrono::Datelike;
 use lettre::{
     message::{header::ContentType, Attachment, Mailbox, MultiPart, SinglePart},
     transport::smtp::authentication::Credentials,
     Message, SmtpTransport, Transport,
 };
-
-fn fetch_poster_image(
-    ctx: &mut CmdContext,
-    series: &SeriesDetails,
-) -> anyhow::Result<(Box<[u8]>, ContentType)> {
-    // TODO: once we switch to SQLite, store the images inside
-    let file_ext = series
-        .poster_extension()
-        .expect("Poster path without valid extension?");
-
-    let cache_dir_path = "posters-cache";
-    let cache_file_path = format!("{cache_dir_path}/{}.{file_ext}", series.id);
-
-    match std::fs::create_dir(cache_dir_path) {
-        Ok(()) => (),
-        Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => (),
-        // TODO: is this a good way?
-        Err(err) => bail!("Posters cache directory could not be created: {err}"),
-    };
-
-    let (data, mime_type) = match std::fs::File::open(&cache_file_path) {
-        Ok(mut file) => {
-            let mut data: Vec<u8> = vec![];
-            file.read_to_end(&mut data)
-                .with_context(|| format!("Reading poster cache file {cache_file_path}"))?;
-
-            let mime_type = tmdb::Client::try_determine_mime_type(&cache_file_path)?;
-            (data.into_boxed_slice(), mime_type)
-        }
-        Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
-            let (data, mime_type) = ctx.tmdb_client.get_poster(&series.poster_path)?;
-            std::fs::write(&cache_file_path, &data)
-                .with_context(|| format!("Writing poster cache file {cache_file_path}"))?;
-            (data, mime_type)
-        }
-        Err(err) => return Err(err.into()),
-    };
-
-    let content_type = ContentType::parse(mime_type).expect("Invalid MIME type");
-    Ok((data, content_type))
-}
 
 struct SeriesEntry<'a> {
     pub state: &'a SeriesState,
@@ -222,8 +178,8 @@ table[class=body] .article {
                     .map(|dt| dt.year().to_string())
                     .unwrap_or("unreleased".to_owned()),
             )
-            .replace("{{url}}", &series_url)
-            .replace("{{poster_url}}", &poster_url)
+            .replace("{{url}}", series_url)
+            .replace("{{poster_url}}", poster_url)
             .replace(
                 "{{in_production}}",
                 &match series_changes.in_production_change {
@@ -339,7 +295,10 @@ pub fn send_email_notifications(
             );
 
             for SeriesEntry { state, .. } in entries.iter() {
-                let (poster_data, poster_content_type) = fetch_poster_image(ctx, &state.details)?;
+                let (poster_data, poster_mime_type) =
+                    crate::poster::fetch_poster_image(&mut ctx.tmdb_client, &state.details)?;
+                let poster_content_type =
+                    ContentType::parse(&poster_mime_type.0).expect("Invalid poster MIME type");
                 let cid_id = format!(
                     "{}.{}",
                     state.details.id,
