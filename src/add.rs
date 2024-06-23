@@ -1,8 +1,12 @@
-use super::{ApplicationState, CmdContext, EpisodeDetails, SeriesId, SeriesState};
+use anyhow::Context;
+use rusqlite::OptionalExtension;
+
+use crate::tmdb::OptionalDate;
+
+use super::{CmdContext, EpisodeDetails, SeriesId};
 
 pub fn add_series(
     ctx: &mut CmdContext,
-    app_state: &mut ApplicationState,
     title: &str,
     first_air_year: Option<i32>,
 ) -> anyhow::Result<bool> {
@@ -12,7 +16,7 @@ pub fn add_series(
             .map(|y| format!(" ({y})"))
             .unwrap_or_default()
     );
-    let search_result = ctx.tmdb_client.search_series(title, first_air_year)?;
+    let search_result = ctx.tmdb.search_series(title, first_air_year)?;
 
     for sr in search_result.results.iter() {
         println!(
@@ -47,22 +51,34 @@ pub fn add_series(
         best_match.name, best_match.first_air_date, best_match.overview
     );
 
-    add_series_by_id(ctx, app_state, best_match.id)
+    add_series_by_id(ctx, best_match.id)
 }
 
-pub fn add_series_by_id(
-    ctx: &mut CmdContext,
-    app_state: &mut ApplicationState,
-    id: SeriesId,
-) -> anyhow::Result<bool> {
+pub fn add_series_by_id(ctx: &mut CmdContext, id: SeriesId) -> anyhow::Result<bool> {
     println!("Adding series by id: {id}");
 
-    if app_state.tracked_series.contains_key(&id) {
-        println!("-- Ignoring: series is already tracked");
-        return Ok(true);
-    }
+    match ctx
+        .db
+        .query_row(
+            "SELECT title, first_air_date FROM series WHERE tmdb_id = ? LIMIT 1",
+            (id,),
+            |row| <(String, OptionalDate)>::try_from(row),
+        )
+        .optional()
+        .with_context(|| format!("Looking for series with ID {id}"))?
+    {
+        Some((existing_title, existing_release_date)) => {
+            println!(
+                "-- Ignoring: series is already tracked: {existing_title} ({existing_release_date})"
+            );
+            return Ok(true);
+        }
+        None => (),
+    };
 
-    let series_details = ctx.tmdb_client.get_series_details(id)?;
+    let series_details = ctx.tmdb.get_series_details(id)?;
+    let (series_poster_data, series_poster_mime_type) =
+        ctx.tmdb.get_poster(&series_details.poster_path)?;
 
     println!(
         "-- In production: {} | status: {}",
@@ -78,25 +94,26 @@ pub fn add_series_by_id(
             .unwrap_or("unknown".to_owned())
     );
 
-    let next_update_timestamp = ctx.determine_next_update_timestamp(&series_details);
-    app_state.tracked_series.insert(
-        series_details.id,
-        SeriesState {
-            details: series_details,
-            timestamp: ctx.now,
-            next_update_timestamp,
-        },
-    );
-    ctx.app_state_changed = true;
+    ctx.db.execute(
+        "INSERT INTO series (tmdb_id, title, first_air_date, poster_data, poster_mime_type, status, in_production, last_episode_air_date, next_episode_air_date, details, update_timestamp) VALUES (:tmdb_id, :title, :first_air_date, :poster_data, :poster_mime_type, :status, :in_production, :last_episode_air_date, :next_episode_air_date, :details, NOW())",
+        rusqlite::named_params! {
+            ":tmdb_id": id,
+            ":title": series_details.name,
+            ":first_air_date": series_details.first_air_date,
+            ":poster_data": series_poster_data,
+            ":poster_mime_type": series_poster_mime_type,
+            ":status": series_details.status,
+            ":in_production": series_details.in_production,
+            ":last_episode_air_date": series_details.last_episode_to_air.as_ref().and_then(|ep| ep.air_date.0),
+            ":next_episode_air_date": series_details.next_episode_to_air.as_ref().and_then(|ep| ep.air_date.0),
+            ":details": serde_json::to_value(&series_details).unwrap(),
+        }
+    ).with_context(|| format!("Inserting series {} into the database", series_details.identify()))?;
 
     Ok(true)
 }
 
-pub fn add_all_series(
-    ctx: &mut CmdContext,
-    app_state: &mut ApplicationState,
-    file_path: &str,
-) -> anyhow::Result<()> {
+pub fn add_all_series(ctx: &mut CmdContext, file_path: &str) -> anyhow::Result<()> {
     println!("Adding all series from file: {file_path}");
 
     // Allow the line to optionally end in the release (first air) year in parens, e.g. (2024).
@@ -122,7 +139,7 @@ pub fn add_all_series(
 
         let (title, first_air_year) = parse_line(line);
 
-        add_series(ctx, app_state, title, first_air_year)?;
+        add_series(ctx, title, first_air_year)?;
         println!();
     }
 

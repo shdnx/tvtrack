@@ -1,3 +1,5 @@
+use anyhow::Context;
+
 use crate::tmdb::SeriesId;
 
 use super::{
@@ -70,20 +72,26 @@ fn collect_series_details_changes(
 
 fn update_and_collect_changes(
     ctx: &mut CmdContext,
-    series_state: &mut SeriesState,
-) -> anyhow::Result<(SeriesDetailsChanges, chrono::DateTime<chrono::Utc>)> {
+    series: &mut SeriesDetails,
+) -> anyhow::Result<SeriesDetailsChanges> {
     let new_details = ctx
-        .tmdb_client
-        .get_series_details(series_state.details.id)?;
-    let changes = collect_series_details_changes(&series_state.details, &new_details);
-    let old_timestamp = series_state.timestamp;
+        .tmdb
+        .get_series_details(series.id)?;
+    let changes = collect_series_details_changes(&series, &new_details);
 
-    series_state.details = new_details;
-    series_state.timestamp = ctx.now;
-    series_state.next_update_timestamp = ctx.determine_next_update_timestamp(&series_state.details);
-    ctx.app_state_changed = true;
+    ctx.db.execute(
+        "UPDATE series SET status = :status, in_production = :in_production, last_episode_air_date = :last_episode_air_date, next_episode_air_date = :next_episode_air_date, details = :details, update_timestamp = NOW() WHERE tmdb_id = :id",
+        rusqlite::named_params! {
+            ":id": series.id,
+            ":status": new_details.status,
+            ":in_production": new_details.in_production,
+            ":last_episode_air_date": new_details.last_episode_to_air.as_ref().and_then(|ep| ep.air_date.0),
+            ":next_episode_air_date": new_details.next_episode_to_air.as_ref().and_then(|ep| ep.air_date.0),
+            ":details": serde_json::to_value(&new_details).unwrap(),
+        }
+    ).with_context(|| format!("Updating series {} in the database", series.identify()))?;
 
-    Ok((changes, old_timestamp))
+    Ok(changes)
 }
 
 pub fn update_one_series(
@@ -100,7 +108,7 @@ pub fn update_one_series(
         return Ok(None);
     }
 
-    let (changes, since_timestamp) = update_and_collect_changes(ctx, series_state)?;
+    let changes = update_and_collect_changes(ctx, series_state)?;
     if !changes.has_any_changes() {
         println!(
             "No changes to {} since last update at {since_timestamp}",
@@ -138,7 +146,6 @@ pub fn update_one_series(
 
 pub fn update_all_series(
     ctx: &mut CmdContext,
-    app_state: &mut ApplicationState,
     force: bool,
 ) -> anyhow::Result<Vec<SeriesDetailsChanges>> {
     let mut changes = Vec::with_capacity(app_state.tracked_series.len());

@@ -1,22 +1,19 @@
 mod add;
 mod config;
 mod notify;
-mod state;
 mod tmdb;
 mod update;
-mod poster;
 
-use anyhow::bail;
+use anyhow::{bail, Context};
 use config::AppConfig;
-use state::{ApplicationState, SeriesState};
 use tmdb::{EpisodeDetails, SeriesDetails, SeriesId, SeriesStatus};
 use update::SeriesDetailsChanges;
 
 struct CmdContext {
     config: AppConfig,
-    tmdb_client: tmdb::Client,
+    db: rusqlite::Connection,
+    tmdb: tmdb::Client,
     now: chrono::DateTime<chrono::Utc>,
-    app_state_changed: bool,
 }
 
 impl CmdContext {
@@ -53,8 +50,10 @@ fn main() -> anyhow::Result<()> {
         config::AppConfig::try_read(&file_path)?
     };
 
-    let mut app_state = ApplicationState::read_from_or_new(&config.state_file_path.0)?;
     let mut ctx = {
+        let db = rusqlite::Connection::open(&config.state_file_path.0)
+            .with_context(|| format!("Failed to open SQLite DB: {}", config.state_file_path.0))?;
+
         // TODO: this is a bit ugly, just pass &config.tmdb instead?
         let tmdb_client = tmdb::Client::new(
             config.tmdb.api_key.clone(),
@@ -63,9 +62,9 @@ fn main() -> anyhow::Result<()> {
 
         CmdContext {
             config,
-            tmdb_client,
+            db,
+            tmdb: tmdb_client,
             now: chrono::Utc::now(), // used to ensure that all series update timestamps are exactly the same if they are updated together
-            app_state_changed: false,
         }
     };
 
@@ -76,7 +75,7 @@ fn main() -> anyhow::Result<()> {
         "a" | "add" => {
             let title = args.get(1).expect("Expected title of series to add");
             let first_air_year = args.get(2).and_then(|a| a.parse::<i32>().ok());
-            add::add_series(&mut ctx, &mut app_state, title, first_air_year)?;
+            add::add_series(&mut ctx, title, first_air_year)?;
         }
         "add-id" => {
             let series_id = SeriesId(
@@ -84,13 +83,13 @@ fn main() -> anyhow::Result<()> {
                     .and_then(|a| a.parse::<i32>().ok())
                     .expect("Expected TMDB series ID to add"),
             );
-            add::add_series_by_id(&mut ctx, &mut app_state, series_id)?;
+            add::add_series_by_id(&mut ctx, series_id)?;
         }
         "add-all" => {
             let file_path = args
                 .get(1)
                 .expect("Expected path to file containing series titles to add");
-            add::add_all_series(&mut ctx, &mut app_state, file_path)?;
+            add::add_all_series(&mut ctx, file_path)?;
         }
         "u" | "update" => {
             let all_changes = match args.get(1).map(|s| s.as_ref()) {
@@ -133,10 +132,6 @@ fn main() -> anyhow::Result<()> {
             print_help();
         }
     };
-
-    if ctx.app_state_changed {
-        app_state.write_to(&ctx.config.state_file_path.0)?;
-    }
 
     Ok(())
 }

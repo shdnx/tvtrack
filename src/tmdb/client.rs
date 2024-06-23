@@ -3,7 +3,7 @@ use std::path::Path;
 use anyhow::{anyhow, Context};
 use lettre::message::header::ContentType;
 
-use super::{SearchResults, SeriesDetails, SeriesFound, SeriesId};
+use super::{MimeType, SearchResults, SeriesDetails, SeriesFound, SeriesId};
 
 static API_ROOT_URL: &str = "https://api.themoviedb.org/3/";
 
@@ -34,26 +34,10 @@ impl Client {
         format!("https://www.themoviedb.org/tv/{id}")
     }
 
-    // TODO: move somewhere else
-    pub fn try_determine_mime_type(path: &str) -> anyhow::Result<&'static str> {
-        let ext = Path::new(path)
-            .extension()
-            .and_then(|ext| ext.to_str())
-            .with_context(|| format!("File path {path} does not have a valid extension"))?;
-
-        match ext {
-            "jpg" | "jpeg" => Ok("image/jpeg"),
-            "png" => Ok("image/png"),
-            _ => Err(anyhow!(
-                "Could not determine MIME type for path {path} with unknown extension {ext}"
-            )),
-        }
-    }
-
-    pub fn get_poster(&self, path: &str) -> anyhow::Result<(Box<[u8]>, &'static str)> {
+    pub fn get_poster(&self, path: &str) -> anyhow::Result<(Box<[u8]>, MimeType)> {
         // TODO: we should be getting the base url and the image width closest to what we want from the TMDB API; see https://developer.themoviedb.org/docs/image-basics
         let url = format!("https://image.tmdb.org/t/p/w92{path}");
-        let mime_type = Self::try_determine_mime_type(path)?;
+        let mime_type = MimeType::identify_from_ext(path)?;
 
         let mut buf = vec![];
         self.agent
@@ -62,7 +46,7 @@ impl Client {
                 "Authorization",
                 &format!("Bearer {}", self.api_access_token),
             )
-            .set("Accept", mime_type)
+            .set("Accept", mime_type.as_str())
             .call()
             .with_context(|| format!("TMDB::get_poster({path:?})"))?
             .into_reader()

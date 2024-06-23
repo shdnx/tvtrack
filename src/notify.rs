@@ -271,7 +271,7 @@ pub fn send_email_notifications(
             SeriesEntry {
                 state,
                 changes,
-                url: ctx.tmdb_client.make_series_url(id),
+                url: ctx.tmdb.make_series_url(id),
                 poster_url: format!("cid:{id}.{}", state.details.poster_extension().unwrap()),
             }
         })
@@ -296,7 +296,7 @@ pub fn send_email_notifications(
 
             for SeriesEntry { state, .. } in entries.iter() {
                 let (poster_data, poster_mime_type) =
-                    crate::poster::fetch_poster_image(&mut ctx.tmdb_client, &state.details)?;
+                    crate::poster::fetch_poster_image(&mut ctx.tmdb, &state.details)?;
                 let poster_content_type =
                     ContentType::parse(&poster_mime_type.0).expect("Invalid poster MIME type");
                 let cid_id = format!(
