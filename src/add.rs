@@ -57,7 +57,7 @@ pub fn add_series(
 pub fn add_series_by_id(ctx: &mut AppContext, id: SeriesId) -> anyhow::Result<bool> {
     println!("Adding series by id: {id}");
 
-    match ctx
+    let existing_series = ctx
         .db
         .conn
         .query_row(
@@ -66,16 +66,14 @@ pub fn add_series_by_id(ctx: &mut AppContext, id: SeriesId) -> anyhow::Result<bo
             |row| <(String, OptionalDate)>::try_from(row),
         )
         .optional()
-        .with_context(|| format!("Looking for series with ID {id}"))?
-    {
-        Some((existing_title, existing_release_date)) => {
-            println!(
-                "-- Ignoring: series is already tracked: {existing_title} ({existing_release_date})"
-            );
-            return Ok(true);
-        }
-        None => (),
-    };
+        .with_context(|| format!("Looking for series with ID {id}"))?;
+
+    if let Some((existing_title, existing_release_date)) = existing_series {
+        println!(
+            "-- Ignoring: series is already tracked: {existing_title} ({existing_release_date})"
+        );
+        return Ok(true);
+    }
 
     let series_details = ctx.tmdb.get_series_details(id)?;
     let series_poster = ctx.tmdb.get_poster(&series_details.poster_path)?;
