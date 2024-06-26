@@ -3,10 +3,13 @@ create table series (
     title text not null,
     first_air_date text, /* may be null if unreleased */
 
-    poster_data blob, /* image data */
-    poster_mime_type text,
+    poster_id int references posters(id),
 
-    /* note: these fields are also all present in in the `details` JSON */
+    /*
+        note: these fields are also all present in in the `details` JSON;
+        we make them dedicated fields to make it easier to work with them
+        but they always have to be consistent with the data in `details`
+    */
     status text,
     in_production int, /* 0 or 1 */
     last_episode_air_date text,
@@ -17,8 +20,15 @@ create table series (
     update_timestamp text
 );
 
+create table posters (
+    id int not null primary key,
+    img_data blob not null,
+    mime_type text not null,
+    source_url text
+);
+
 create table users (
-    id int primary key,
+    id int not null primary key,
     name text not null,
     email text not null
 );

@@ -1,10 +1,9 @@
 use anyhow::Context;
+use chrono::TimeZone;
 
-use crate::tmdb::SeriesId;
+use crate::{db, tmdb::SeriesId};
 
-use super::{
-    ApplicationState, CmdContext, EpisodeDetails, SeriesDetails, SeriesState, SeriesStatus,
-};
+use super::{AppContext, EpisodeDetails, SeriesDetails, SeriesStatus};
 
 #[derive(Debug)]
 pub struct SeriesDetailsChanges {
@@ -71,15 +70,13 @@ fn collect_series_details_changes(
 }
 
 fn update_and_collect_changes(
-    ctx: &mut CmdContext,
+    ctx: &mut AppContext,
     series: &mut SeriesDetails,
 ) -> anyhow::Result<SeriesDetailsChanges> {
-    let new_details = ctx
-        .tmdb
-        .get_series_details(series.id)?;
-    let changes = collect_series_details_changes(&series, &new_details);
+    let new_details = ctx.tmdb.get_series_details(series.id)?;
+    let changes = collect_series_details_changes(series, &new_details);
 
-    ctx.db.execute(
+    ctx.db.conn.execute(
         "UPDATE series SET status = :status, in_production = :in_production, last_episode_air_date = :last_episode_air_date, next_episode_air_date = :next_episode_air_date, details = :details, update_timestamp = NOW() WHERE tmdb_id = :id",
         rusqlite::named_params! {
             ":id": series.id,
@@ -95,29 +92,32 @@ fn update_and_collect_changes(
 }
 
 pub fn update_one_series(
-    ctx: &mut CmdContext,
-    series_state: &mut SeriesState,
+    ctx: &mut AppContext,
+    series: &mut db::Series,
     force: bool,
 ) -> anyhow::Result<Option<SeriesDetailsChanges>> {
-    if !force && ctx.now < series_state.next_update_timestamp {
+    let next_update_timestamp = determine_next_update_timestamp(series);
+    if !force && chrono::Utc::now() < next_update_timestamp {
         println!(
-            "Not updating {} because not enough time passed since last update at {}",
-            series_state.details.identify(),
-            series_state.timestamp
+            "Not updating {} again until {} (last update: {})",
+            series.details.identify(),
+            next_update_timestamp,
+            series.update_timestamp
         );
         return Ok(None);
     }
 
-    let changes = update_and_collect_changes(ctx, series_state)?;
+    let changes = update_and_collect_changes(ctx, &mut series.details)?;
     if !changes.has_any_changes() {
         println!(
-            "No changes to {} since last update at {since_timestamp}",
-            series_state.details.identify()
+            "No changes to {} since last update at {}",
+            series.details.identify(),
+            series.update_timestamp
         );
         return Ok(None);
     }
 
-    println!("Series {} changes:", series_state.details.identify());
+    println!("Series {} changes:", series.details.identify());
     if let Some((old_in_prod, new_in_prod)) = changes.in_production_change {
         println!(" - In production: {old_in_prod} => {new_in_prod}");
     }
@@ -144,22 +144,50 @@ pub fn update_one_series(
     Ok(Some(changes))
 }
 
-pub fn update_all_series(
-    ctx: &mut CmdContext,
-    force: bool,
-) -> anyhow::Result<Vec<SeriesDetailsChanges>> {
-    let mut changes = Vec::with_capacity(app_state.tracked_series.len());
+pub fn determine_next_update_timestamp(series: &db::Series) -> chrono::DateTime<chrono::Utc> {
+    if let Some(next_ep_dt) = series.next_episode_air_date.0 {
+        // if we know when the next episode is airing, then we don't need to update it again until after that date
+        return chrono::Utc.from_utc_datetime(&next_ep_dt.and_hms_opt(23, 59, 59).unwrap());
+    }
 
-    for (_series_id, series_state) in app_state.tracked_series.iter_mut() {
-        match update_one_series(ctx, series_state, force) {
+    let now = chrono::Utc::now();
+    match series.status {
+        SeriesStatus::Ended | SeriesStatus::Canceled => {
+            // if the last episode aired at least 4 weeks ago, then we consider things unlikely to change, so we don't have to update the series as often
+            let last_ep_is_old = series
+                .last_episode_air_date
+                .map(|dt| now.date_naive().signed_duration_since(dt).num_weeks() >= 4)
+                .unwrap_or(true);
+
+            if last_ep_is_old {
+                now + chrono::Duration::weeks(4)
+            } else {
+                now + chrono::Duration::weeks(1)
+            }
+        }
+        SeriesStatus::InProduction | SeriesStatus::ReturningSeries => {
+            now + chrono::Duration::weeks(1)
+        }
+    }
+}
+
+pub fn update_all_series(
+    ctx: &mut AppContext,
+    force: bool,
+) -> anyhow::Result<Vec<(db::Series, SeriesDetailsChanges)>> {
+    let series = ctx.db.get_all_series()?;
+    let mut changes = Vec::with_capacity(series.len());
+
+    for mut series in series.into_iter() {
+        match update_one_series(ctx, &mut series, force) {
             Ok(None) => {}
             Ok(Some(series_changes)) => {
-                changes.push(series_changes);
+                changes.push((series, series_changes));
             }
             Err(err) => {
                 eprintln!(
                     "Error while updating series {}: {err:?}",
-                    series_state.details.identify()
+                    series.details.identify()
                 );
             }
         }

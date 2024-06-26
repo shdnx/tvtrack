@@ -1,35 +1,17 @@
 mod add;
 mod config;
+mod context;
+mod db;
 mod notify;
 mod tmdb;
 mod update;
 
-use anyhow::{bail, Context};
+use anyhow::bail;
 use config::AppConfig;
+use context::AppContext;
+use db::Db;
 use tmdb::{EpisodeDetails, SeriesDetails, SeriesId, SeriesStatus};
 use update::SeriesDetailsChanges;
-
-struct CmdContext {
-    config: AppConfig,
-    db: rusqlite::Connection,
-    tmdb: tmdb::Client,
-    now: chrono::DateTime<chrono::Utc>,
-}
-
-impl CmdContext {
-    pub fn determine_next_update_timestamp(
-        &self,
-        series: &SeriesDetails,
-    ) -> chrono::DateTime<chrono::Utc> {
-        let update_freq = match series.status {
-            SeriesStatus::InProduction | SeriesStatus::ReturningSeries => {
-                chrono::TimeDelta::days(3)
-            }
-            SeriesStatus::Canceled | SeriesStatus::Ended => chrono::TimeDelta::weeks(1),
-        };
-        self.now + update_freq
-    }
-}
 
 fn print_help() {
     println!(
@@ -47,12 +29,11 @@ fn main() -> anyhow::Result<()> {
     // TODO: take optionally as a command line argument, only check env if that is not present
     let config = {
         let file_path = std::env::var("TVTRACK_CONFIG_FILE").expect("TVTRACK_CONFIG_FILE not set");
-        config::AppConfig::try_read(&file_path)?
+        AppConfig::try_read(&file_path)?
     };
 
     let mut ctx = {
-        let db = rusqlite::Connection::open(&config.state_file_path.0)
-            .with_context(|| format!("Failed to open SQLite DB: {}", config.state_file_path.0))?;
+        let db = Db::open(&config.state_file_path.0)?;
 
         // TODO: this is a bit ugly, just pass &config.tmdb instead?
         let tmdb_client = tmdb::Client::new(
@@ -60,11 +41,10 @@ fn main() -> anyhow::Result<()> {
             config.tmdb.api_access_token.clone(),
         );
 
-        CmdContext {
+        AppContext {
             config,
             db,
             tmdb: tmdb_client,
-            now: chrono::Utc::now(), // used to ensure that all series update timestamps are exactly the same if they are updated together
         }
     };
 
@@ -92,12 +72,12 @@ fn main() -> anyhow::Result<()> {
             add::add_all_series(&mut ctx, file_path)?;
         }
         "u" | "update" => {
-            let all_changes = match args.get(1).map(|s| s.as_ref()) {
+            let all_series_changes = match args.get(1).map(|s| s.as_ref()) {
                 Some(series_id) if series_id.parse::<i32>().is_ok() => {
                     let series_id =
                         SeriesId(series_id.parse::<i32>().expect("Series ID to update"));
 
-                    let Some(series_state) = app_state.tracked_series.get_mut(&series_id) else {
+                    let Some(mut series) = ctx.db.get_series_by_id(series_id)? else {
                         bail!("No tracked series with ID {series_id}")
                     };
 
@@ -107,21 +87,19 @@ fn main() -> anyhow::Result<()> {
                         .map(|a| a == "-f" || a == "--force")
                         .unwrap_or(false);
 
-                    match update::update_one_series(&mut ctx, series_state, force)? {
+                    match update::update_one_series(&mut ctx, &mut series, force)? {
                         None => Vec::new(),
-                        Some(changes) => vec![changes],
+                        Some(changes) => vec![(series, changes)],
                     }
                 }
-                Some("-f") | Some("--force") => {
-                    update::update_all_series(&mut ctx, &mut app_state, true)?
-                }
+                Some("-f") | Some("--force") => update::update_all_series(&mut ctx, true)?,
                 Some(unknown_arg) => bail!("Unknown argument {unknown_arg}"),
-                None => update::update_all_series(&mut ctx, &mut app_state, false)?,
+                None => update::update_all_series(&mut ctx, false)?,
             };
 
             // TODO: allow notifications to be only printed, for testing/debugging
-            if !all_changes.is_empty() {
-                notify::send_email_notifications(&mut ctx, &app_state, all_changes)?;
+            if !all_series_changes.is_empty() {
+                notify::send_email_notifications(&mut ctx, all_series_changes)?;
             }
         }
         "h" | "help" | "-h" | "--help" => {

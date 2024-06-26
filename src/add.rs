@@ -1,12 +1,12 @@
 use anyhow::Context;
 use rusqlite::OptionalExtension;
 
-use crate::tmdb::OptionalDate;
+use crate::{db, tmdb::OptionalDate};
 
-use super::{CmdContext, EpisodeDetails, SeriesId};
+use super::{AppContext, EpisodeDetails, SeriesId};
 
 pub fn add_series(
-    ctx: &mut CmdContext,
+    ctx: &mut AppContext,
     title: &str,
     first_air_year: Option<i32>,
 ) -> anyhow::Result<bool> {
@@ -54,11 +54,12 @@ pub fn add_series(
     add_series_by_id(ctx, best_match.id)
 }
 
-pub fn add_series_by_id(ctx: &mut CmdContext, id: SeriesId) -> anyhow::Result<bool> {
+pub fn add_series_by_id(ctx: &mut AppContext, id: SeriesId) -> anyhow::Result<bool> {
     println!("Adding series by id: {id}");
 
     match ctx
         .db
+        .conn
         .query_row(
             "SELECT title, first_air_date FROM series WHERE tmdb_id = ? LIMIT 1",
             (id,),
@@ -77,8 +78,7 @@ pub fn add_series_by_id(ctx: &mut CmdContext, id: SeriesId) -> anyhow::Result<bo
     };
 
     let series_details = ctx.tmdb.get_series_details(id)?;
-    let (series_poster_data, series_poster_mime_type) =
-        ctx.tmdb.get_poster(&series_details.poster_path)?;
+    let series_poster = ctx.tmdb.get_poster(&series_details.poster_path)?;
 
     println!(
         "-- In production: {} | status: {}",
@@ -94,14 +94,23 @@ pub fn add_series_by_id(ctx: &mut CmdContext, id: SeriesId) -> anyhow::Result<bo
             .unwrap_or("unknown".to_owned())
     );
 
-    ctx.db.execute(
-        "INSERT INTO series (tmdb_id, title, first_air_date, poster_data, poster_mime_type, status, in_production, last_episode_air_date, next_episode_air_date, details, update_timestamp) VALUES (:tmdb_id, :title, :first_air_date, :poster_data, :poster_mime_type, :status, :in_production, :last_episode_air_date, :next_episode_air_date, :details, NOW())",
+    ctx.db.conn.execute(
+        "INSERT INTO posters (img_data, mime_type, source_url) VALUES (:img_data, :mime_type, :source_url)",
+        rusqlite::named_params! {
+            ":img_data": series_poster.img_data,
+            ":mime_type": series_poster.mime_type,
+            ":source_url": series_poster.source_url,
+        }
+    ).with_context(|| format!("Inserting series {} poster from {}", series_details.identify(), series_poster.source_url))?;
+    let new_poster_id = db::PosterId(ctx.db.conn.last_insert_rowid());
+
+    ctx.db.conn.execute(
+        "INSERT INTO series (tmdb_id, title, first_air_date, poster_id, status, in_production, last_episode_air_date, next_episode_air_date, details, update_timestamp) VALUES (:tmdb_id, :title, :first_air_date, :poster_data, :poster_mime_type, :status, :in_production, :last_episode_air_date, :next_episode_air_date, :details, NOW())",
         rusqlite::named_params! {
             ":tmdb_id": id,
             ":title": series_details.name,
             ":first_air_date": series_details.first_air_date,
-            ":poster_data": series_poster_data,
-            ":poster_mime_type": series_poster_mime_type,
+            ":poster_id": new_poster_id,
             ":status": series_details.status,
             ":in_production": series_details.in_production,
             ":last_episode_air_date": series_details.last_episode_to_air.as_ref().and_then(|ep| ep.air_date.0),
@@ -113,7 +122,7 @@ pub fn add_series_by_id(ctx: &mut CmdContext, id: SeriesId) -> anyhow::Result<bo
     Ok(true)
 }
 
-pub fn add_all_series(ctx: &mut CmdContext, file_path: &str) -> anyhow::Result<()> {
+pub fn add_all_series(ctx: &mut AppContext, file_path: &str) -> anyhow::Result<()> {
     println!("Adding all series from file: {file_path}");
 
     // Allow the line to optionally end in the release (first air) year in parens, e.g. (2024).

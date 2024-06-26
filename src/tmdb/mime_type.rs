@@ -3,7 +3,7 @@ use lettre::message::header::ContentType;
 use rusqlite::types::{FromSql, ToSql};
 use std::{borrow::Borrow, fmt, path::Path};
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Hash)]
 pub struct MimeType(String);
 
 impl MimeType {
@@ -54,7 +54,8 @@ impl ToSql for MimeType {
 
 impl FromSql for MimeType {
     fn column_result(value: rusqlite::types::ValueRef<'_>) -> rusqlite::types::FromSqlResult<Self> {
-        <String as FromSql>::column_result(value).map(MimeType)
+        let value_str = <String as FromSql>::column_result(value)?;
+        MimeType::new(value_str).map_err(|err| rusqlite::types::FromSqlError::Other(err.into()))
     }
 }
 
@@ -83,14 +84,20 @@ impl TryFrom<&Path> for MimeType {
     }
 }
 
-impl Into<ContentType> for MimeType {
-    fn into(self) -> ContentType {
-        ContentType::parse(&self.0).expect("Should have been checked-valid already")
-    }
-}
-
 impl Borrow<str> for MimeType {
     fn borrow(&self) -> &str {
         self.as_str()
+    }
+}
+
+impl AsRef<str> for MimeType {
+    fn as_ref(&self) -> &str {
+        self.as_str()
+    }
+}
+
+impl From<MimeType> for ContentType {
+    fn from(value: MimeType) -> Self {
+        ContentType::parse(value.as_str()).expect("Should have been checked-valid already")
     }
 }

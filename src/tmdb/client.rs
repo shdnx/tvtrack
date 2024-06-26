@@ -3,7 +3,7 @@ use std::path::Path;
 use anyhow::{anyhow, Context};
 use lettre::message::header::ContentType;
 
-use super::{MimeType, SearchResults, SeriesDetails, SeriesFound, SeriesId};
+use super::{MimeType, Poster, SearchResults, SeriesDetails, SeriesFound, SeriesId};
 
 static API_ROOT_URL: &str = "https://api.themoviedb.org/3/";
 
@@ -34,7 +34,7 @@ impl Client {
         format!("https://www.themoviedb.org/tv/{id}")
     }
 
-    pub fn get_poster(&self, path: &str) -> anyhow::Result<(Box<[u8]>, MimeType)> {
+    pub fn get_poster(&self, path: &str) -> anyhow::Result<Poster> {
         // TODO: we should be getting the base url and the image width closest to what we want from the TMDB API; see https://developer.themoviedb.org/docs/image-basics
         let url = format!("https://image.tmdb.org/t/p/w92{path}");
         let mime_type = MimeType::identify_from_ext(path)?;
@@ -52,7 +52,11 @@ impl Client {
             .into_reader()
             .read_to_end(&mut buf)?;
 
-        Ok((buf.into_boxed_slice(), mime_type))
+        Ok(Poster {
+            img_data: buf.into_boxed_slice(),
+            mime_type,
+            source_url: url,
+        })
     }
 
     pub fn search_series(

@@ -1,7 +1,4 @@
-use crate::{
-    state::{ApplicationState, SeriesState},
-    CmdContext, SeriesDetailsChanges,
-};
+use crate::{db, AppContext, SeriesDetailsChanges};
 use anyhow::Context;
 use chrono::Datelike;
 use lettre::{
@@ -10,8 +7,8 @@ use lettre::{
     Message, SmtpTransport, Transport,
 };
 
-struct SeriesEntry<'a> {
-    pub state: &'a SeriesState,
+struct SeriesEntry {
+    pub series: db::Series,
     pub changes: SeriesDetailsChanges,
     pub url: String,
     pub poster_url: String,
@@ -137,7 +134,7 @@ table[class=body] .article {
 
     for i in 0..entries.len() {
         let SeriesEntry {
-            state: series_state,
+            series,
             changes: series_changes,
             url: series_url,
             poster_url,
@@ -169,10 +166,10 @@ table[class=body] .article {
         let series_html = template
             .to_string()
             .replace("{{margin_bottom}}", if is_last { "0" } else { "30" })
-            .replace("{{title}}", &series_state.details.name)
+            .replace("{{title}}", &series.details.name)
             .replace(
                 "{{release_year}}",
-                &series_state
+                &series
                     .details
                     .first_air_date
                     .map(|dt| dt.year().to_string())
@@ -184,7 +181,7 @@ table[class=body] .article {
                 "{{in_production}}",
                 &match series_changes.in_production_change {
                     None => {
-                        if series_state.details.in_production {
+                        if series.details.in_production {
                             "In production".to_owned()
                         } else {
                             "Not in production".to_owned()
@@ -197,7 +194,7 @@ table[class=body] .article {
             .replace(
                 "{{status}}",
                 &match series_changes.status_change {
-                    None => series_state.details.status.to_string(),
+                    None => series.details.status.to_string(),
                     Some((old_status, new_status)) => {
                         wrap_changed(&format!("{old_status} &#8658; {new_status}"))
                     }
@@ -205,7 +202,7 @@ table[class=body] .article {
             )
             .replace(
                 "{{last_episode}}",
-                &series_state
+                &series
                     .details
                     .last_episode_to_air
                     .as_ref()
@@ -213,7 +210,7 @@ table[class=body] .article {
                     .unwrap_or("none".to_owned()),
             )
             .replace("{{next_episode}}", &{
-                let ep_info = series_state
+                let ep_info = series
                     .details
                     .next_episode_to_air
                     .as_ref()
@@ -250,9 +247,8 @@ table[class=body] .article {
 }
 
 pub fn send_email_notifications(
-    ctx: &mut CmdContext,
-    app_state: &ApplicationState,
-    changes: Vec<SeriesDetailsChanges>,
+    ctx: &mut AppContext,
+    changes: Vec<(db::Series, SeriesDetailsChanges)>,
 ) -> anyhow::Result<()> {
     // NOTE: we are using CIDs to attach the poster image data inline with the e-mail
     // this is because we don't have a simple GET url for them without leaking our TMDB API key
@@ -265,14 +261,14 @@ pub fn send_email_notifications(
 
     let entries = changes
         .into_iter()
-        .map(|changes| {
+        .map(|(series, changes)| {
             let id = changes.id;
-            let state = app_state.tracked_series.get(&id).unwrap();
+            let poster_file_ext = series.details.poster_extension().unwrap().to_owned();
             SeriesEntry {
-                state,
+                series,
                 changes,
                 url: ctx.tmdb.make_series_url(id),
-                poster_url: format!("cid:{id}.{}", state.details.poster_extension().unwrap()),
+                poster_url: format!("cid:{id}.{poster_file_ext}"),
             }
         })
         .collect::<Vec<_>>();
@@ -286,7 +282,7 @@ pub fn send_email_notifications(
             ctx.config.emails.to_name.clone(),
             ctx.config.emails.to_address.parse()?,
         ))
-        .subject(format!("TVTrack updates {}", ctx.now.date_naive()))
+        .subject(format!("TVTrack updates {}", chrono::Local::now().date_naive()))
         .multipart(MultiPart::mixed().multipart({
             let mut multipart = MultiPart::related().singlepart(
                 SinglePart::builder()
@@ -294,19 +290,27 @@ pub fn send_email_notifications(
                     .body(make_email_html(&entries)),
             );
 
-            for SeriesEntry { state, .. } in entries.iter() {
-                let (poster_data, poster_mime_type) =
-                    crate::poster::fetch_poster_image(&mut ctx.tmdb, &state.details)?;
-                let poster_content_type =
-                    ContentType::parse(&poster_mime_type.0).expect("Invalid poster MIME type");
+            for SeriesEntry { series, .. } in entries.iter() {
+                let Some(poster) =
+                    ctx.db.get_poster_by_id(series.poster_id).with_context(|| {
+                        format!("Querying poster for {}", series.details.identify())
+                    })?
+                else {
+                    anyhow::bail!(
+                        "Could not find poster with ID {} for series {}",
+                        series.poster_id,
+                        series.details.identify()
+                    );
+                };
+
                 let cid_id = format!(
                     "{}.{}",
-                    state.details.id,
-                    state.details.poster_extension().unwrap()
+                    series.details.id,
+                    series.details.poster_extension().unwrap()
                 ); // TODO: duplication between this and entry.poster_url
 
                 let attachment = Attachment::new_inline(cid_id)
-                    .body(Vec::from(poster_data), poster_content_type);
+                    .body(Vec::from(poster.img_data), poster.mime_type.into());
                 multipart = multipart.singlepart(attachment);
             }
 
