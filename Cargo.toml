@@ -8,6 +8,7 @@ edition = "2021"
 [dependencies]
 anyhow = "1.0.86"
 chrono = { version = "0.4.38", features = ["serde"] }
+clap = { version = "4.5.9", features = ["derive"] }
 lettre = "0.11.7"
 rusqlite = { version = "0.31.0", features = ["serde_json", "chrono"] }
 serde = { version = "1.0", features = ["derive"] }

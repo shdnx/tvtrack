@@ -120,8 +120,8 @@ pub fn add_series_by_id(ctx: &mut AppContext, id: SeriesId) -> anyhow::Result<bo
     Ok(true)
 }
 
-pub fn add_all_series(ctx: &mut AppContext, file_path: &str) -> anyhow::Result<()> {
-    println!("Adding all series from file: {file_path}");
+pub fn add_all_series(ctx: &mut AppContext, file_path: &std::path::Path) -> anyhow::Result<()> {
+    println!("Adding all series from file: {file_path:?}");
 
     // Allow the line to optionally end in the release (first air) year in parens, e.g. (2024).
     fn parse_line(line: &str) -> (&str, Option<i32>) {

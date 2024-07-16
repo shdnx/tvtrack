@@ -21,7 +21,7 @@ pub struct AppConfig {
 }
 
 impl AppConfig {
-    pub fn try_read(file_path: &String) -> anyhow::Result<AppConfig> {
+    pub fn try_read(file_path: &std::path::Path) -> anyhow::Result<AppConfig> {
         let json = &std::fs::read_to_string(file_path)
             .with_context(|| format!("Reading config file {file_path:?}"))?;
         serde_json::from_str::<AppConfig>(json)
