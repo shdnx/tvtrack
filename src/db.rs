@@ -5,6 +5,11 @@ use rusqlite::types::{FromSql, ToSql};
 
 use crate::tmdb::{self, MimeType, OptionalDate};
 
+pub trait TableModel: Sized {
+    fn table_name() -> &'static str;
+    fn from_full_row(row: &rusqlite::Row) -> anyhow::Result<Self>;
+}
+
 pub struct Db {
     pub conn: rusqlite::Connection,
 }
@@ -30,42 +35,60 @@ impl Db {
         }
     }
 
-    pub fn get_poster_by_id(&mut self, id: PosterId) -> anyhow::Result<Option<Poster>> {
+    pub fn get_by_id<T: TableModel>(&mut self, id: i64) -> anyhow::Result<Option<T>> {
+        let sql = format!("SELECT * FROM {} WHERE id = ? LIMIT 1", T::table_name());
+
         let result = self
             .conn
-            .query_row_and_then(
-                "SELECT * FROM posters WHERE id = ? LIMIT 1",
-                (id,),
-                Poster::from_full_row,
-            )
-            .with_context(|| format!("Querying poster with ID {id}"));
+            .query_row_and_then(&sql, (id,), T::from_full_row)
+            .with_context(|| format!("Querying {} for ID {id}", T::table_name()));
 
         Self::optional_single_row_result(result)
+    }
+
+    pub fn get_poster_by_id(&mut self, id: PosterId) -> anyhow::Result<Option<Poster>> {
+        self.get_by_id::<Poster>(id.0)
     }
 
     pub fn get_series_by_id(&mut self, id: tmdb::SeriesId) -> anyhow::Result<Option<Series>> {
-        let result = self
-            .conn
-            .query_row_and_then(
-                "SELECT * FROM series WHERE tmdb_id = ? LIMIT 1",
-                (id,),
-                Series::from_full_row,
-            )
-            .with_context(|| format!("Querying series with ID {id}"));
+        self.get_by_id::<Series>(id.0 as i64)
+    }
 
-        Self::optional_single_row_result(result)
+    pub fn get_all<T: TableModel>(&mut self) -> anyhow::Result<Vec<T>> {
+        let sql = format!("SELECT * FROM {}", T::table_name());
+        let mut stmt = self
+            .conn
+            .prepare(&sql)
+            .with_context(|| format!("Querying all {}", T::table_name()))?;
+
+        let rows = stmt.query_and_then((), T::from_full_row)?;
+        let mut result = Vec::new();
+        for (row_idx, row) in rows.into_iter().enumerate() {
+            result.push(row.with_context(|| {
+                format!("Error deserializing {} row {row_idx}", T::table_name())
+            })?);
+        }
+        Ok(result)
     }
 
     pub fn get_all_series(&mut self) -> anyhow::Result<Vec<Series>> {
+        self.get_all::<Series>()
+    }
+
+    pub fn get_all_users_subscribed_to_series(
+        &mut self,
+        series_id: tmdb::SeriesId,
+    ) -> anyhow::Result<Vec<User>> {
         let mut stmt = self
             .conn
-            .prepare("SELECT * FROM series")
-            .context("Querying all series")?;
+            .prepare("SELECT users.id AS id, users.name AS name, users.email AS email FROM tracked_series INNER JOIN users ON tracked_series.user_id = users.id WHERE series_tmdb_id = ?")
+            .with_context(|| format!("Querying all users subscribed to series {}", series_id))?;
 
-        let rows = stmt.query_and_then((), Series::from_full_row)?;
+        let rows = stmt.query_and_then((series_id,), User::from_full_row)?;
+
         let mut result = Vec::new();
         for (row_idx, row) in rows.into_iter().enumerate() {
-            result.push(row.with_context(|| format!("Error deserializing series row {row_idx}"))?);
+            result.push(row.with_context(|| format!("Error deserializing user row {row_idx}"))?);
         }
         Ok(result)
     }
@@ -100,8 +123,12 @@ pub struct Poster {
     pub source_url: Option<String>, // TODO: shouldn't remain optional once the DB is migrated and we have the source url for everything
 }
 
-impl Poster {
-    pub fn from_full_row(row: &rusqlite::Row) -> anyhow::Result<Self> {
+impl TableModel for Poster {
+    fn table_name() -> &'static str {
+        "posters"
+    }
+
+    fn from_full_row(row: &rusqlite::Row) -> anyhow::Result<Self> {
         let result = Poster {
             id: row.get("id")?,
             img_data: row.get::<_, Vec<u8>>("img_data")?.into_boxed_slice(),
@@ -130,10 +157,14 @@ pub struct Series {
     pub update_timestamp: chrono::DateTime<chrono::Utc>,
 }
 
-impl Series {
-    pub fn from_full_row(row: &rusqlite::Row) -> anyhow::Result<Self> {
+impl TableModel for Series {
+    fn table_name() -> &'static str {
+        "series"
+    }
+
+    fn from_full_row(row: &rusqlite::Row) -> anyhow::Result<Self> {
         let raw_details = row.get::<_, serde_json::Value>(8)?;
-        let result = Series {
+        let result = Self {
             tmdb_id: row.get("tmdb_id")?,
             poster_id: row.get("poster_id")?,
             title: row.get("title")?,
@@ -146,6 +177,28 @@ impl Series {
                 .context("Deserializing tmdb::SeriesDetails from series.details")?,
             details_json: raw_details,
             update_timestamp: row.get("update_timestamp")?,
+        };
+        Ok(result)
+    }
+}
+
+#[derive(Debug)]
+pub struct User {
+    pub id: i64, // TODO: UserId
+    pub name: String,
+    pub email: String,
+}
+
+impl TableModel for User {
+    fn table_name() -> &'static str {
+        "users"
+    }
+
+    fn from_full_row(row: &rusqlite::Row) -> anyhow::Result<Self> {
+        let result = Self {
+            id: row.get("id")?,
+            name: row.get("name")?,
+            email: row.get("email")?,
         };
         Ok(result)
     }

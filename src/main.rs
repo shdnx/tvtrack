@@ -51,13 +51,13 @@ fn main() -> anyhow::Result<()> {
             title,
             first_air_year,
         } => {
-            add::add_series(&mut ctx, title, *first_air_year)?;
+            add::add_series_by_title(&mut ctx, title, *first_air_year)?;
         }
         cli::Command::AddById { tmdb_id } => {
             add::add_series_by_id(&mut ctx, SeriesId(*tmdb_id))?;
         }
         cli::Command::AddFrom { file_path } => {
-            add::add_all_series(&mut ctx, file_path)?;
+            add::multi_add_series_from_file(&mut ctx, file_path)?;
         }
         cli::Command::Update { tmdb_id, force } => {
             let force = force.unwrap_or(false);
@@ -79,7 +79,7 @@ fn main() -> anyhow::Result<()> {
 
             // TODO: allow notifications to be only printed, for testing/debugging
             if !all_series_changes.is_empty() {
-                notify::send_email_notifications(&mut ctx, all_series_changes)?;
+                notify::send_email_notifications(&mut ctx, &all_series_changes)?;
             }
         }
     };

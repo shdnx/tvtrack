@@ -7,11 +7,30 @@ use lettre::{
     Message, SmtpTransport, Transport,
 };
 
-struct SeriesEntry {
-    pub series: db::Series,
-    pub changes: SeriesDetailsChanges,
+struct SeriesEntry<'a> {
+    pub series: &'a db::Series,
+    pub changes: &'a SeriesDetailsChanges,
     pub url: String,
-    pub poster_url: String,
+    pub poster: db::Poster,
+}
+
+impl<'a> SeriesEntry<'a> {
+    pub fn poster_attachment_id(&self) -> String {
+        let series_id = self.series.details.id;
+        let poster_file_ext = self.series.details.poster_extension().unwrap();
+        format!("{series_id}.{poster_file_ext}")
+    }
+
+    pub fn poster_attachment_uri(&self) -> String {
+        String::from("cid:") + self.poster_attachment_id().as_ref()
+    }
+
+    pub fn create_poster_attachment(&self) -> SinglePart {
+        Attachment::new_inline(self.poster_attachment_id()).body(
+            Vec::from(self.poster.img_data.clone()),
+            self.poster.mime_type.clone().into(),
+        )
+    }
 }
 
 fn make_email_html(entries: &[SeriesEntry]) -> String {
@@ -133,12 +152,7 @@ table[class=body] .article {
 "###.into();
 
     for i in 0..entries.len() {
-        let SeriesEntry {
-            series,
-            changes: series_changes,
-            url: series_url,
-            poster_url,
-        } = &entries[i];
+        let entry = &entries[i];
         let is_last = i == entries.len() - 1;
 
         let template = r###"
@@ -166,22 +180,23 @@ table[class=body] .article {
         let series_html = template
             .to_string()
             .replace("{{margin_bottom}}", if is_last { "0" } else { "30" })
-            .replace("{{title}}", &series.details.name)
+            .replace("{{title}}", &entry.series.details.name)
             .replace(
                 "{{release_year}}",
-                &series
+                &entry
+                    .series
                     .details
                     .first_air_date
                     .map(|dt| dt.year().to_string())
                     .unwrap_or("unreleased".to_owned()),
             )
-            .replace("{{url}}", series_url)
-            .replace("{{poster_url}}", poster_url)
+            .replace("{{url}}", &entry.url)
+            .replace("{{poster_url}}", &entry.poster_attachment_uri())
             .replace(
                 "{{in_production}}",
-                &match series_changes.in_production_change {
+                &match entry.changes.in_production_change {
                     None => {
-                        if series.details.in_production {
+                        if entry.series.details.in_production {
                             "In production".to_owned()
                         } else {
                             "Not in production".to_owned()
@@ -193,8 +208,8 @@ table[class=body] .article {
             )
             .replace(
                 "{{status}}",
-                &match series_changes.status_change {
-                    None => series.details.status.to_string(),
+                &match entry.changes.status_change {
+                    None => entry.series.details.status.to_string(),
                     Some((old_status, new_status)) => {
                         wrap_changed(&format!("{old_status} &#8658; {new_status}"))
                     }
@@ -202,7 +217,8 @@ table[class=body] .article {
             )
             .replace(
                 "{{last_episode}}",
-                &series
+                &entry
+                    .series
                     .details
                     .last_episode_to_air
                     .as_ref()
@@ -210,14 +226,15 @@ table[class=body] .article {
                     .unwrap_or("none".to_owned()),
             )
             .replace("{{next_episode}}", &{
-                let ep_info = series
+                let ep_info = entry
+                    .series
                     .details
                     .next_episode_to_air
                     .as_ref()
                     .map(|ep| ep.identify())
                     .unwrap_or("unknown".to_owned());
 
-                if series_changes.next_episode_change.is_some() {
+                if entry.changes.next_episode_change.is_some() {
                     wrap_changed(&ep_info)
                 } else {
                     ep_info
@@ -246,9 +263,42 @@ table[class=body] .article {
     html
 }
 
+fn series_changes_to_entries<'a>(
+    ctx: &mut AppContext,
+    changes: &'a [(db::Series, SeriesDetailsChanges)],
+) -> anyhow::Result<Box<[SeriesEntry<'a>]>> {
+    let mut entries = Vec::new();
+
+    for (series, changes) in changes.iter() {
+        let Some(poster) = ctx
+            .db
+            .get_poster_by_id(series.poster_id)
+            .with_context(|| format!("Querying poster for {}", series.details.identify()))?
+        else {
+            anyhow::bail!(
+                "Could not find poster with ID {} for series {}",
+                series.poster_id,
+                series.details.identify()
+            );
+        };
+
+        let series_id = changes.id;
+        let new_entry = SeriesEntry {
+            series,
+            changes,
+            url: ctx.tmdb.make_series_url(series_id),
+            poster,
+        };
+
+        entries.push(new_entry);
+    }
+
+    Ok(entries.into_boxed_slice())
+}
+
 pub fn send_email_notifications(
     ctx: &mut AppContext,
-    changes: Vec<(db::Series, SeriesDetailsChanges)>,
+    changes: &[(db::Series, SeriesDetailsChanges)],
 ) -> anyhow::Result<()> {
     // NOTE: we are using CIDs to attach the poster image data inline with the e-mail
     // this is because we don't have a simple GET url for them without leaking our TMDB API key
@@ -259,19 +309,21 @@ pub fn send_email_notifications(
     // - https://stackoverflow.com/a/40420648/128240
     // - https://users.rust-lang.org/t/add-attachment-to-message-builder-in-lettre-email-sender/68471
 
-    let entries = changes
-        .into_iter()
-        .map(|(series, changes)| {
-            let id = changes.id;
-            let poster_file_ext = series.details.poster_extension().unwrap().to_owned();
-            SeriesEntry {
-                series,
-                changes,
-                url: ctx.tmdb.make_series_url(id),
-                poster_url: format!("cid:{id}.{poster_file_ext}"),
-            }
-        })
-        .collect::<Vec<_>>();
+    let entries = series_changes_to_entries(ctx, changes)?;
+
+    let email_multipart_contents = MultiPart::mixed().multipart({
+        let mut multipart = MultiPart::related().singlepart(
+            SinglePart::builder()
+                .header(ContentType::TEXT_HTML)
+                .body(make_email_html(&entries)),
+        );
+
+        for entry in entries.iter() {
+            multipart = multipart.singlepart(entry.create_poster_attachment());
+        }
+
+        multipart
+    });
 
     let email = Message::builder()
         .from(Mailbox::new(
@@ -282,40 +334,11 @@ pub fn send_email_notifications(
             ctx.config.emails.to_name.clone(),
             ctx.config.emails.to_address.parse()?,
         ))
-        .subject(format!("TVTrack updates {}", chrono::Local::now().date_naive()))
-        .multipart(MultiPart::mixed().multipart({
-            let mut multipart = MultiPart::related().singlepart(
-                SinglePart::builder()
-                    .header(ContentType::TEXT_HTML)
-                    .body(make_email_html(&entries)),
-            );
-
-            for SeriesEntry { series, .. } in entries.iter() {
-                let Some(poster) =
-                    ctx.db.get_poster_by_id(series.poster_id).with_context(|| {
-                        format!("Querying poster for {}", series.details.identify())
-                    })?
-                else {
-                    anyhow::bail!(
-                        "Could not find poster with ID {} for series {}",
-                        series.poster_id,
-                        series.details.identify()
-                    );
-                };
-
-                let cid_id = format!(
-                    "{}.{}",
-                    series.details.id,
-                    series.details.poster_extension().unwrap()
-                ); // TODO: duplication between this and entry.poster_url
-
-                let attachment = Attachment::new_inline(cid_id)
-                    .body(Vec::from(poster.img_data), poster.mime_type.into());
-                multipart = multipart.singlepart(attachment);
-            }
-
-            multipart
-        }))?;
+        .subject(format!(
+            "TVTrack updates {}",
+            chrono::Local::now().date_naive()
+        ))
+        .multipart(email_multipart_contents)?;
 
     let credentials = Credentials::new(
         ctx.config.smtp.user.clone(),

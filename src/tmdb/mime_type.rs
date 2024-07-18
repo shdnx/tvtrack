@@ -3,7 +3,7 @@ use lettre::message::header::ContentType;
 use rusqlite::types::{FromSql, ToSql};
 use std::{borrow::Borrow, fmt, path::Path};
 
-#[derive(Debug, PartialEq, Eq, Hash)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub struct MimeType(String);
 
 impl MimeType {

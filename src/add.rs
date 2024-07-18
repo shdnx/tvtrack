@@ -5,7 +5,7 @@ use crate::{db, tmdb::OptionalDate};
 
 use super::{AppContext, EpisodeDetails, SeriesId};
 
-pub fn add_series(
+pub fn add_series_by_title(
     ctx: &mut AppContext,
     title: &str,
     first_air_year: Option<i32>,
@@ -120,7 +120,7 @@ pub fn add_series_by_id(ctx: &mut AppContext, id: SeriesId) -> anyhow::Result<bo
     Ok(true)
 }
 
-pub fn add_all_series(ctx: &mut AppContext, file_path: &std::path::Path) -> anyhow::Result<()> {
+pub fn multi_add_series_from_file(ctx: &mut AppContext, file_path: &std::path::Path) -> anyhow::Result<()> {
     println!("Adding all series from file: {file_path:?}");
 
     // Allow the line to optionally end in the release (first air) year in parens, e.g. (2024).
@@ -146,7 +146,7 @@ pub fn add_all_series(ctx: &mut AppContext, file_path: &std::path::Path) -> anyh
 
         let (title, first_air_year) = parse_line(line);
 
-        add_series(ctx, title, first_air_year)?;
+        add_series_by_title(ctx, title, first_air_year)?;
         println!();
     }
 
