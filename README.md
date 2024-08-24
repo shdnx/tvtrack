@@ -6,6 +6,8 @@ Sending e-mails happens by SMTP, so any provider will do. Currently using [MailT
 ## Build and run
 
 To run, use `run.sh`.
+The configuration file lives at `data/tvtrack.config.json` by default.
+The database by default lives at `data/tvtrack.state.sqlite` by default.
 
 ## TODO
 
