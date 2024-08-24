@@ -9,12 +9,18 @@ To run: `cargo run --config ./data/tvtrack.test.config.json <command>`.
 Instead of passing `--config`, you can also set the `TVTRACK_CONFIG_FILE` environment variable.
 `run.sh` provides a convenient shortcut for the above.
 
+## E-mails
+
+MailTrap's shared IP apparently has a really bad reputation, so e-mails from it are extremely likely to be marked as SPAM.
+Bulk e-mails require an unsubscribe link, and the one that MailTrap inserts causes the e-mails to be detected as SPAM due to the unsubscribe link pointing to a domain that's in the [Invaluement database](https://www.invaluement.com/). So use the transactional e-mails SMTP endpoint instead.
+
 ## TODO
 
 - Use proper logging
 - Set up on NAS, auto-schedule execution of `update`
     - Need to set up some monitoring
 - Write unit tests
+- Apparently not having a plaintext version of the e-mail is suspicious for some SPAM detectors
 - Perhaps save a backup of the database every time we make changes? Or save previous version of series in a separate table?
 - Properly support multiple users. For example, when adding a series, also ask which users to register it for. Or add another mechanism for subscribing.
 
