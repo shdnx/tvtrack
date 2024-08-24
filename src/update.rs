@@ -1,13 +1,13 @@
 use anyhow::Context;
 use chrono::TimeZone;
 
-use crate::{db, tmdb::SeriesId};
+use crate::{db, tmdb};
 
 use super::{AppContext, EpisodeDetails, SeriesDetails, SeriesStatus};
 
 #[derive(Debug)]
 pub struct SeriesDetailsChanges {
-    pub id: SeriesId,
+    pub id: tmdb::SeriesId,
     pub in_production_change: Option<(bool, bool)>,
     pub status_change: Option<(SeriesStatus, SeriesStatus)>,
     pub next_episode_change: Option<(Option<EpisodeDetails>, Option<EpisodeDetails>)>,
@@ -16,7 +16,7 @@ pub struct SeriesDetailsChanges {
 }
 
 impl SeriesDetailsChanges {
-    pub fn new(id: SeriesId) -> SeriesDetailsChanges {
+    pub fn new(id: tmdb::SeriesId) -> SeriesDetailsChanges {
         SeriesDetailsChanges {
             id,
             in_production_change: None,
@@ -71,24 +71,31 @@ fn collect_series_details_changes(
 
 fn update_and_collect_changes(
     ctx: &mut AppContext,
-    series: &mut SeriesDetails,
-) -> anyhow::Result<SeriesDetailsChanges> {
-    let new_details = ctx.tmdb.get_series_details(series.id)?;
-    let changes = collect_series_details_changes(series, &new_details);
+    old_details: &SeriesDetails,
+) -> anyhow::Result<(
+    SeriesDetailsChanges,
+    SeriesDetails,
+    chrono::DateTime<chrono::Utc>,
+)> {
+    let series_id = old_details.id;
+    let new_details = ctx.tmdb.get_series_details(series_id)?;
+    let changes = collect_series_details_changes(old_details, &new_details);
+    let update_timestamp = chrono::Utc::now();
 
     ctx.db.conn.execute(
-        "UPDATE series SET status = :status, in_production = :in_production, last_episode_air_date = :last_episode_air_date, next_episode_air_date = :next_episode_air_date, details = :details, update_timestamp = NOW() WHERE tmdb_id = :id",
+        "UPDATE series SET status = :status, in_production = :in_production, last_episode_air_date = :last_episode_air_date, next_episode_air_date = :next_episode_air_date, details = :details, update_timestamp = :update_timestamp WHERE tmdb_id = :id",
         rusqlite::named_params! {
-            ":id": series.id,
+            ":id": series_id,
             ":status": new_details.status,
             ":in_production": new_details.in_production,
             ":last_episode_air_date": new_details.last_episode_to_air.as_ref().and_then(|ep| ep.air_date.0),
             ":next_episode_air_date": new_details.next_episode_to_air.as_ref().and_then(|ep| ep.air_date.0),
             ":details": serde_json::to_value(&new_details).unwrap(),
+            ":update_timestamp": update_timestamp,
         }
-    ).with_context(|| format!("Updating series {} in the database", series.identify()))?;
+    ).with_context(|| format!("Updating series {} in the database", old_details.identify()))?;
 
-    Ok(changes)
+    Ok((changes, new_details, update_timestamp))
 }
 
 pub fn update_one_series(
@@ -107,7 +114,8 @@ pub fn update_one_series(
         return Ok(None);
     }
 
-    let changes = update_and_collect_changes(ctx, &mut series.details)?;
+    let (changes, new_details, update_timestamp) =
+        update_and_collect_changes(ctx, &series.details)?;
     if !changes.has_any_changes() {
         println!(
             "No changes to {} since last update at {}",
@@ -126,6 +134,20 @@ pub fn update_one_series(
     }
     if let Some((ref old_next_ep, ref new_next_ep)) = changes.next_episode_change {
         println!(
+            " - Last episode: {} => {}",
+            series
+                .details
+                .last_episode_to_air
+                .as_ref()
+                .map(|e| e.identify())
+                .unwrap_or("unknown".into()),
+            new_details
+                .last_episode_to_air
+                .as_ref()
+                .map(|e| e.identify())
+                .unwrap_or("unknown".into()),
+        );
+        println!(
             " - Next episode: {} => {}",
             old_next_ep
                 .as_ref()
@@ -141,6 +163,7 @@ pub fn update_one_series(
         println!(" - Episode count: {old_ep_count} => {new_ep_count}");
     }
 
+    series.set_details(new_details, update_timestamp);
     Ok(Some(changes))
 }
 
@@ -151,7 +174,7 @@ pub fn determine_next_update_timestamp(series: &db::Series) -> chrono::DateTime<
     }
 
     let now = chrono::Utc::now();
-    match series.status {
+    let interval = match series.status {
         SeriesStatus::Ended | SeriesStatus::Canceled => {
             // if the last episode aired at least 4 weeks ago, then we consider things unlikely to change, so we don't have to update the series as often
             let last_ep_is_old = series
@@ -160,15 +183,14 @@ pub fn determine_next_update_timestamp(series: &db::Series) -> chrono::DateTime<
                 .unwrap_or(true);
 
             if last_ep_is_old {
-                now + chrono::Duration::weeks(4)
+                chrono::Duration::weeks(4)
             } else {
-                now + chrono::Duration::weeks(1)
+                chrono::Duration::weeks(1)
             }
         }
-        SeriesStatus::InProduction | SeriesStatus::ReturningSeries => {
-            now + chrono::Duration::weeks(1)
-        }
-    }
+        SeriesStatus::InProduction | SeriesStatus::ReturningSeries => chrono::Duration::weeks(1),
+    };
+    series.update_timestamp + interval
 }
 
 pub fn update_all_series(

@@ -40,7 +40,14 @@ impl Db {
 
         let result = self
             .conn
-            .query_row_and_then(&sql, (id,), T::from_full_row)
+            .query_row_and_then(&sql, (id,), |row| {
+                T::from_full_row(row).with_context(|| {
+                    format!(
+                        "Deserializing {} row with id = {id}: {row:?}",
+                        T::table_name()
+                    )
+                })
+            })
             .with_context(|| format!("Querying {} for ID {id}", T::table_name()));
 
         Self::optional_single_row_result(result)
@@ -61,14 +68,37 @@ impl Db {
             .prepare(&sql)
             .with_context(|| format!("Querying all {}", T::table_name()))?;
 
-        let rows = stmt.query_and_then((), T::from_full_row)?;
+        let rows = stmt
+            .query_and_then((), |row| {
+                T::from_full_row(row).with_context(|| {
+                    format!("Error deserializing {} row: {row:?}", T::table_name())
+                })
+            })
+            .with_context(|| format!("Querying all {}", T::table_name()))?;
         let mut result = Vec::new();
-        for (row_idx, row) in rows.into_iter().enumerate() {
-            result.push(row.with_context(|| {
-                format!("Error deserializing {} row {row_idx}", T::table_name())
-            })?);
+        for row in rows {
+            result.push(row?);
         }
         Ok(result)
+    }
+
+    pub fn insert_series(&mut self, new_series: &Series) -> anyhow::Result<()> {
+        self.conn.execute(
+            "INSERT INTO series (tmdb_id, title, first_air_date, poster_id, status, in_production, last_episode_air_date, next_episode_air_date, details, update_timestamp) VALUES (:tmdb_id, :title, :first_air_date, :poster_data, :poster_mime_type, :status, :in_production, :last_episode_air_date, :next_episode_air_date, :details, :update_timestamp)",
+            rusqlite::named_params! {
+                ":tmdb_id": new_series.tmdb_id,
+                ":title": new_series.title,
+                ":first_air_date": new_series.first_air_date,
+                ":poster_id": new_series.poster_id,
+                ":status": new_series.status,
+                ":in_production": new_series.in_production,
+                ":last_episode_air_date": new_series.last_episode_air_date,
+                ":next_episode_air_date": new_series.next_episode_air_date,
+                ":details": new_series.details_json,
+                ":update_timestamp": new_series.update_timestamp,
+            }
+        ).with_context(|| format!("Inserting series {} into the database: {:?}", new_series.details.identify(), new_series))?;
+        Ok(())
     }
 
     pub fn get_all_series(&mut self) -> anyhow::Result<Vec<Series>> {
@@ -84,7 +114,9 @@ impl Db {
             .prepare("SELECT users.id AS id, users.name AS name, users.email AS email FROM tracked_series INNER JOIN users ON tracked_series.user_id = users.id WHERE series_tmdb_id = ?")
             .with_context(|| format!("Querying all users subscribed to series {}", series_id))?;
 
-        let rows = stmt.query_and_then((series_id,), User::from_full_row)?;
+        let rows = stmt.query_and_then((series_id,), |row| {
+            User::from_full_row(row).with_context(|| format!("deserializing user row {row:?}"))
+        })?;
 
         let mut result = Vec::new();
         for (row_idx, row) in rows.into_iter().enumerate() {
@@ -157,13 +189,29 @@ pub struct Series {
     pub update_timestamp: chrono::DateTime<chrono::Utc>,
 }
 
+impl Series {
+    pub fn set_details(
+        &mut self,
+        new_details: tmdb::SeriesDetails,
+        update_timestamp: chrono::DateTime<chrono::Utc>,
+    ) {
+        self.in_production = new_details.in_production;
+        self.status = new_details.status;
+        self.last_episode_air_date = new_details.last_episode_date();
+        self.next_episode_air_date = new_details.next_episode_date();
+        self.details_json = serde_json::to_value(new_details.clone()).unwrap();
+        self.details = new_details;
+        self.update_timestamp = update_timestamp;
+    }
+}
+
 impl TableModel for Series {
     fn table_name() -> &'static str {
         "series"
     }
 
     fn from_full_row(row: &rusqlite::Row) -> anyhow::Result<Self> {
-        let raw_details = row.get::<_, serde_json::Value>(8)?;
+        let raw_details = row.get::<_, serde_json::Value>("details")?;
         let result = Self {
             tmdb_id: row.get("tmdb_id")?,
             poster_id: row.get("poster_id")?,

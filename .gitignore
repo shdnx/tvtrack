@@ -1,7 +1,8 @@
+/.vscode
 /target
 tracked-series.txt
 tvtrack.config.json
 tvtrack.state.json
+*.bak
 *.sqlite
-/src/bin/enemy_graph.rs
 /posters-cache

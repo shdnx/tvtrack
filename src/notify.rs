@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::{db, AppContext, SeriesDetailsChanges};
 use anyhow::Context;
 use chrono::Datelike;
@@ -7,6 +9,7 @@ use lettre::{
     Message, SmtpTransport, Transport,
 };
 
+#[derive(Debug)]
 struct SeriesEntry<'a> {
     pub series: &'a db::Series,
     pub changes: &'a SeriesDetailsChanges,
@@ -311,34 +314,39 @@ pub fn send_email_notifications(
 
     let entries = series_changes_to_entries(ctx, changes)?;
 
-    let email_multipart_contents = MultiPart::mixed().multipart({
-        let mut multipart = MultiPart::related().singlepart(
-            SinglePart::builder()
-                .header(ContentType::TEXT_HTML)
-                .body(make_email_html(&entries)),
-        );
+    let mut users_to_entries = HashMap::<i64, (db::User, Vec<&SeriesEntry<'_>>)>::new();
+    for entry in entries.iter() {
+        let subscribed_users = ctx
+            .db
+            .get_all_users_subscribed_to_series(entry.series.details.id)?;
 
-        for entry in entries.iter() {
-            multipart = multipart.singlepart(entry.create_poster_attachment());
+        if subscribed_users.is_empty() {
+            eprintln!(
+                "WARNING: no users subscribed to series {} (ID {})",
+                entry.series.details.identify(),
+                entry.series.tmdb_id
+            );
         }
 
-        multipart
-    });
+        for user in subscribed_users {
+            users_to_entries
+                .entry(user.id)
+                .and_modify(|(_, user_entries)| user_entries.push(entry))
+                .or_insert_with(|| (user, vec![entry]));
+        }
+    }
 
-    let email = Message::builder()
-        .from(Mailbox::new(
-            ctx.config.emails.from_name.clone(),
-            ctx.config.emails.from_address.parse()?,
-        ))
-        .to(Mailbox::new(
-            ctx.config.emails.to_name.clone(),
-            ctx.config.emails.to_address.parse()?,
-        ))
-        .subject(format!(
-            "TVTrack updates {}",
-            chrono::Local::now().date_naive()
-        ))
-        .multipart(email_multipart_contents)?;
+    // eprintln!("Users to notify about series ({}):", users_to_entries.len());
+    // for (user, entries) in users_to_entries.values() {
+    //     eprintln!(" - User: {user:?}");
+    //     eprintln!(
+    //         " - Entries: {:?}",
+    //         entries
+    //             .iter()
+    //             .map(|ent| ent.series.details.identify())
+    //             .collect::<Vec<_>>()
+    //     );
+    // }
 
     let credentials = Credentials::new(
         ctx.config.smtp.user.clone(),
@@ -351,8 +359,38 @@ pub fn send_email_notifications(
         .credentials(credentials)
         .build();
 
-    mailer
-        .send(&email)
-        .context("Sending e-mail notifications via SMTP")?;
+    let from_mailbox = Mailbox::new(
+        ctx.config.emails.from_name.clone(),
+        ctx.config.emails.from_address.parse()?,
+    );
+    let now = chrono::Local::now();
+
+    for (user, series_entries) in users_to_entries.values() {
+        let email_multipart_contents = MultiPart::mixed().multipart({
+            let mut multipart = MultiPart::related().singlepart(
+                SinglePart::builder()
+                    .header(ContentType::TEXT_HTML)
+                    .body(make_email_html(&entries)),
+            );
+
+            for entry in series_entries.iter() {
+                multipart = multipart.singlepart(entry.create_poster_attachment());
+            }
+
+            multipart
+        });
+
+        let email = Message::builder()
+            .from(from_mailbox.clone())
+            .to(Mailbox::new(Some(user.name.clone()), user.email.parse()?))
+            .subject(format!("TVTrack updates {}", now.date_naive()))
+            .multipart(email_multipart_contents)
+            .with_context(|| format!("building email for {user:?}"))?;
+
+        mailer
+            .send(&email)
+            .context("Sending e-mail notifications via SMTP")?;
+    }
+
     Ok(())
 }

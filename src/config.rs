@@ -48,7 +48,4 @@ pub struct EmailsConfig {
     #[serde(default)]
     pub from_name: Option<String>,
     pub from_address: String,
-    #[serde(default)]
-    pub to_name: Option<String>,
-    pub to_address: String,
 }

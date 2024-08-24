@@ -84,6 +84,15 @@ pub fn add_series_by_id(ctx: &mut AppContext, id: SeriesId) -> anyhow::Result<bo
     );
 
     println!(
+        "-- Last episode: {}",
+        series_details
+            .last_episode_to_air
+            .as_ref()
+            .map(EpisodeDetails::identify)
+            .unwrap_or("unknown".to_owned())
+    );
+
+    println!(
         "-- Next episode: {}",
         series_details
             .next_episode_to_air
@@ -102,25 +111,38 @@ pub fn add_series_by_id(ctx: &mut AppContext, id: SeriesId) -> anyhow::Result<bo
     ).with_context(|| format!("Inserting series {} poster from {}", series_details.identify(), series_poster.source_url))?;
     let new_poster_id = db::PosterId(ctx.db.conn.last_insert_rowid());
 
+    let new_series = db::Series {
+        tmdb_id: id,
+        title: series_details.name.clone(),
+        first_air_date: series_details.first_air_date,
+        poster_id: new_poster_id,
+        status: series_details.status,
+        in_production: series_details.in_production,
+        last_episode_air_date: series_details.last_episode_date(),
+        next_episode_air_date: series_details.next_episode_date(),
+        details: series_details.clone(),
+        details_json: serde_json::to_value(&series_details).unwrap(),
+        update_timestamp: chrono::Utc::now(),
+    };
+    ctx.db.insert_series(&new_series)?;
+
+    // TODO: user ID is me, but make this more flexible eventually
     ctx.db.conn.execute(
-        "INSERT INTO series (tmdb_id, title, first_air_date, poster_id, status, in_production, last_episode_air_date, next_episode_air_date, details, update_timestamp) VALUES (:tmdb_id, :title, :first_air_date, :poster_data, :poster_mime_type, :status, :in_production, :last_episode_air_date, :next_episode_air_date, :details, NOW())",
+        "INSERT INTO tracked_series (user_id, series_tmdb_id, start_timestamp) VALUES (:user_id, :series_id, :start_timestamp)",
         rusqlite::named_params! {
-            ":tmdb_id": id,
-            ":title": series_details.name,
-            ":first_air_date": series_details.first_air_date,
-            ":poster_id": new_poster_id,
-            ":status": series_details.status,
-            ":in_production": series_details.in_production,
-            ":last_episode_air_date": series_details.last_episode_to_air.as_ref().and_then(|ep| ep.air_date.0),
-            ":next_episode_air_date": series_details.next_episode_to_air.as_ref().and_then(|ep| ep.air_date.0),
-            ":details": serde_json::to_value(&series_details).unwrap(),
+            ":user_id": 1,
+            ":series_id": new_series.tmdb_id,
+            ":start_timestamp": new_series.update_timestamp,
         }
-    ).with_context(|| format!("Inserting series {} into the database", series_details.identify()))?;
+    ).with_context(|| format!("Inserting tracked series for new series: {}", series_details.identify()))?;
 
     Ok(true)
 }
 
-pub fn multi_add_series_from_file(ctx: &mut AppContext, file_path: &std::path::Path) -> anyhow::Result<()> {
+pub fn multi_add_series_from_file(
+    ctx: &mut AppContext,
+    file_path: &std::path::Path,
+) -> anyhow::Result<()> {
     println!("Adding all series from file: {file_path:?}");
 
     // Allow the line to optionally end in the release (first air) year in parens, e.g. (2024).

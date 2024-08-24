@@ -70,7 +70,7 @@ fn main() -> anyhow::Result<()> {
                 };
 
                 match update::update_one_series(&mut ctx, &mut series, force)? {
-                    None => Vec::new(),
+                    None => vec![],
                     Some(changes) => vec![(series, changes)],
                 }
             } else {

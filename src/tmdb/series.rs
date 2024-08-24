@@ -123,10 +123,18 @@ impl SeriesDetails {
         }
     }
 
-    pub fn next_episode_date(&self) -> Option<chrono::NaiveDate> {
+    pub fn last_episode_date(&self) -> OptionalDate {
+        self.last_episode_to_air
+            .as_ref()
+            .and_then(|ep| ep.air_date.0)
+            .into()
+    }
+
+    pub fn next_episode_date(&self) -> OptionalDate {
         self.next_episode_to_air
             .as_ref()
             .and_then(|ep| ep.air_date.0)
+            .into()
     }
 
     pub fn poster_extension(&self) -> Option<&str> {

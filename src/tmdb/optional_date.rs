@@ -7,6 +7,18 @@ use rusqlite::types::{FromSql, ToSql};
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct OptionalDate(pub Option<chrono::NaiveDate>);
 
+impl From<chrono::NaiveDate> for OptionalDate {
+    fn from(value: chrono::NaiveDate) -> Self {
+        Self(Some(value))
+    }
+}
+
+impl From<Option<chrono::NaiveDate>> for OptionalDate {
+    fn from(value: Option<chrono::NaiveDate>) -> Self {
+        Self(value)
+    }
+}
+
 pub(crate) struct DeserializeVisitor;
 
 impl<'de> serde::de::Visitor<'de> for DeserializeVisitor {
