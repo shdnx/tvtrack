@@ -172,6 +172,7 @@ table[class=body] .article {
                             <li style="list-style-position: inside; margin-left: 5px;">{{status}}</li>
                             <li style="list-style-position: inside; margin-left: 5px;">Last: {{last_episode}}</li>
                             <li style="list-style-position: inside; margin-left: 5px;">Next: {{next_episode}}</li>
+                            <li style="list-style-position: inside; margin-left: 5px;">Episodes: {{episode_count}}</li>
                         </ul>
                         </td>
                     </tr>"###;
@@ -242,7 +243,19 @@ table[class=body] .article {
                 } else {
                     ep_info
                 }
-            });
+            })
+            .replace(
+                "{{episode_count}}",
+                &match entry.changes.episode_count_change {
+                    None => entry.series.details.number_of_episodes.to_string(),
+                    Some((old_count, new_count)) if old_count < new_count => wrap_changed(
+                        &format!("{} new ({new_count} total)", new_count - old_count),
+                    ),
+                    Some((old_count, new_count)) => {
+                        wrap_changed(&format!("{old_count} &#8658; {new_count}"))
+                    }
+                },
+            );
         html += &series_html;
     }
 

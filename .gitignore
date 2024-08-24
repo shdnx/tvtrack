@@ -1,8 +1,3 @@
-/.vscode
-/target
-tracked-series.txt
-tvtrack.config.json
-tvtrack.state.json
-*.bak
-*.sqlite
-/posters-cache
+/.vscode/
+/target/
+/posters-cache/

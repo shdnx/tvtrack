@@ -1,0 +1,4 @@
+*.json
+*.sqlite
+*.bak
+tracked-series.txt
