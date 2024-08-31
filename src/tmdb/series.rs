@@ -115,12 +115,9 @@ pub struct SeriesDetails {
 }
 
 impl SeriesDetails {
+    // TODO: deprecate
     pub fn identify(&self) -> String {
-        if let Some(first_air_date) = self.first_air_date.0 {
-            format!("[{}] {} ({})", self.id, self.name, first_air_date.year())
-        } else {
-            format!("[{}] {} (unreleased)", self.id, self.name)
-        }
+        self.to_string()
     }
 
     pub fn last_episode_date(&self) -> OptionalDate {
@@ -141,5 +138,15 @@ impl SeriesDetails {
         std::path::Path::new(&self.poster_path)
             .extension()
             .and_then(|ext| ext.to_str())
+    }
+}
+
+impl std::fmt::Display for SeriesDetails {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if let Some(first_air_date) = self.first_air_date.0 {
+            write!(f, "[{}] {} ({})", self.id, self.name, first_air_date.year())
+        } else {
+            write!(f, "[{}] {} (unreleased)", self.id, self.name)
+        }
     }
 }

@@ -16,7 +16,7 @@ Bulk e-mails require an unsubscribe link, and the one that MailTrap inserts caus
 
 ## TODO
 
-- Use proper logging
+- Implement a dry-run mode, where we don't update the database nor send e-mails; for testing
 - Set up on NAS, auto-schedule execution of `update`
     - Need to set up some monitoring
 - Write unit tests

@@ -7,6 +7,12 @@ pub struct User {
     pub email: String,
 }
 
+impl std::fmt::Display for User {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "[{}] {} ({})", self.id, self.name, self.email)
+    }
+}
+
 impl TableModel for User {
     fn table_name() -> &'static str {
         "users"

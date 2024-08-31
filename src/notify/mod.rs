@@ -34,8 +34,8 @@ pub fn send_email_notifications(
             .get_all_users_subscribed_to_series(entry.series.details.id)?;
 
         if subscribed_users.is_empty() {
-            eprintln!(
-                "WARNING: no users subscribed to series {} (ID {})",
+            log::warn!(
+                "No users subscribed to series {} (ID {})",
                 entry.series.details.identify(),
                 entry.series.tmdb_id
             );
@@ -48,18 +48,6 @@ pub fn send_email_notifications(
                 .or_insert_with(|| (user, vec![entry]));
         }
     }
-
-    // eprintln!("Users to notify about series ({}):", users_to_entries.len());
-    // for (user, entries) in users_to_entries.values() {
-    //     eprintln!(" - User: {user:?}");
-    //     eprintln!(
-    //         " - Entries: {:?}",
-    //         entries
-    //             .iter()
-    //             .map(|ent| ent.series.details.identify())
-    //             .collect::<Vec<_>>()
-    //     );
-    // }
 
     let credentials = Credentials::new(
         ctx.config.smtp.user.clone(),
@@ -79,6 +67,8 @@ pub fn send_email_notifications(
     let now = chrono::Local::now();
 
     for (user, series_entries) in users_to_entries.values() {
+        log::info!("sending email to {user} about: {series_entries:?}");
+
         let email_multipart_contents = MultiPart::mixed().multipart({
             let mut multipart = MultiPart::related().singlepart(
                 SinglePart::builder()

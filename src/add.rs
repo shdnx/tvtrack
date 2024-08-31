@@ -10,8 +10,8 @@ pub fn add_series_by_title(
     title: &str,
     first_air_year: Option<i32>,
 ) -> anyhow::Result<bool> {
-    println!(
-        "Add series: {title}{}",
+    log::info!(
+        "Searching for series to add: {title}{}",
         first_air_year
             .map(|y| format!(" ({y})"))
             .unwrap_or_default()
@@ -19,9 +19,12 @@ pub fn add_series_by_title(
     let search_result = ctx.tmdb.search_series(title, first_air_year)?;
 
     for sr in search_result.results.iter() {
-        println!(
+        log::debug!(
             "-- Result: #{} {} ({}): {}",
-            sr.id, sr.name, sr.first_air_date, sr.overview
+            sr.id,
+            sr.name,
+            sr.first_air_date,
+            sr.overview
         );
     }
 
@@ -40,22 +43,24 @@ pub fn add_series_by_title(
 
     let best_match = match best_match {
         None => {
-            println!("-- No results");
+            log::warn!("-- No results");
             return Ok(false);
         }
         Some(bm) => bm,
     };
 
-    println!(
+    log::info!(
         "-- Selected: {} ({}): {}",
-        best_match.name, best_match.first_air_date, best_match.overview
+        best_match.name,
+        best_match.first_air_date,
+        best_match.overview
     );
 
     add_series_by_id(ctx, best_match.id)
 }
 
 pub fn add_series_by_id(ctx: &mut AppContext, id: SeriesId) -> anyhow::Result<bool> {
-    println!("Adding series by id: {id}");
+    log::info!("Adding series by TMDB id: {id}");
 
     let existing_series = ctx
         .db
@@ -69,7 +74,7 @@ pub fn add_series_by_id(ctx: &mut AppContext, id: SeriesId) -> anyhow::Result<bo
         .with_context(|| format!("Looking for series with ID {id}"))?;
 
     if let Some((existing_title, existing_release_date)) = existing_series {
-        println!(
+        log::warn!(
             "-- Ignoring: series is already tracked: {existing_title} ({existing_release_date})"
         );
         return Ok(true);
@@ -78,12 +83,13 @@ pub fn add_series_by_id(ctx: &mut AppContext, id: SeriesId) -> anyhow::Result<bo
     let series_details = ctx.tmdb.get_series_details(id)?;
     let series_poster = ctx.tmdb.get_poster(&series_details.poster_path)?;
 
-    println!(
+    log::info!(
         "-- In production: {} | status: {}",
-        series_details.in_production, series_details.status
+        series_details.in_production,
+        series_details.status
     );
 
-    println!(
+    log::info!(
         "-- Last episode: {}",
         series_details
             .last_episode_to_air
@@ -92,7 +98,7 @@ pub fn add_series_by_id(ctx: &mut AppContext, id: SeriesId) -> anyhow::Result<bo
             .unwrap_or("unknown".to_owned())
     );
 
-    println!(
+    log::info!(
         "-- Next episode: {}",
         series_details
             .next_episode_to_air
@@ -143,7 +149,7 @@ pub fn multi_add_series_from_file(
     ctx: &mut AppContext,
     file_path: &std::path::Path,
 ) -> anyhow::Result<()> {
-    println!("Adding all series from file: {file_path:?}");
+    log::info!("Adding all series from file: {file_path:?}");
 
     // Allow the line to optionally end in the release (first air) year in parens, e.g. (2024).
     fn parse_line(line: &str) -> (&str, Option<i32>) {
@@ -169,7 +175,6 @@ pub fn multi_add_series_from_file(
         let (title, first_air_year) = parse_line(line);
 
         add_series_by_title(ctx, title, first_air_year)?;
-        println!();
     }
 
     Ok(())

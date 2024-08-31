@@ -17,7 +17,16 @@ use db::Db;
 use tmdb::{EpisodeDetails, SeriesDetails, SeriesId, SeriesStatus};
 use update::SeriesDetailsChanges;
 
+fn init_logging() {
+    if std::env::var("RUST_LOG").is_err() {
+        std::env::set_var("RUST_LOG", "info");
+    }
+    env_logger::init();
+}
+
 fn main() -> anyhow::Result<()> {
+    init_logging();
+
     let args = cli::Args::parse();
 
     let config = {
@@ -77,7 +86,6 @@ fn main() -> anyhow::Result<()> {
                 update::update_all_series(&mut ctx, force)?
             };
 
-            // TODO: allow notifications to be only printed, for testing/debugging
             if !all_series_changes.is_empty() {
                 notify::send_email_notifications(&mut ctx, &all_series_changes)?;
             }
