@@ -16,10 +16,10 @@ Bulk e-mails require an unsubscribe link, and the one that MailTrap inserts caus
 
 ## TODO
 
+= Make TableModel derive-able, see eg https://github.com/dtolnay/syn/blob/master/examples/heapsize/heapsize_derive/src/lib.rs
 - Implement a dry-run mode, where we don't update the database nor send e-mails; for testing
 - Set up on NAS, auto-schedule execution of `update`
     - Need to set up some monitoring
-- Write unit tests
 - Apparently not having a plaintext version of the e-mail is suspicious for some SPAM detectors
 - Perhaps save a backup of the database every time we make changes? Or save previous version of series in a separate table?
 - Properly support multiple users. For example, when adding a series, also ask which users to register it for. Or add another mechanism for subscribing.
@@ -27,6 +27,7 @@ Bulk e-mails require an unsubscribe link, and the one that MailTrap inserts caus
 ## Improvement ideas
 
 - Also keep track of unreleased movies and notify when they come out
+- Could also notify about release of new books, if GoodReads or TheStoryGraph has a public API
 - We could also keep track of popular shows using https://developer.themoviedb.org/reference/movie-popular-list and send some recommendations based on that?
 - Track releases on NCore as well?
 - We could track changes via https://developer.themoviedb.org/reference/changes-tv-list but I think for now this would lead to having to many more requests than by just querying details directly
