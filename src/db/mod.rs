@@ -85,7 +85,7 @@ impl Db {
 
     pub fn insert_series(&mut self, new_series: &Series) -> anyhow::Result<()> {
         self.conn.execute(
-            "INSERT INTO series (tmdb_id, title, first_air_date, poster_id, status, in_production, last_episode_air_date, next_episode_air_date, details, update_timestamp) VALUES (:tmdb_id, :title, :first_air_date, :poster_data, :poster_mime_type, :status, :in_production, :last_episode_air_date, :next_episode_air_date, :details, :update_timestamp)",
+            "INSERT INTO series (tmdb_id, title, first_air_date, poster_id, status, in_production, last_episode_air_date, next_episode_air_date, details, update_timestamp) VALUES (:tmdb_id, :title, :first_air_date, :poster_id, :status, :in_production, :last_episode_air_date, :next_episode_air_date, :details, :update_timestamp)",
             rusqlite::named_params! {
                 ":tmdb_id": new_series.tmdb_id,
                 ":title": new_series.title,
