@@ -1,6 +1,6 @@
-use std::path::Path;
+use std::{io::Read, path::Path};
 
-use anyhow::{anyhow, Context};
+use anyhow::{Context, anyhow};
 use lettre::message::header::ContentType;
 
 use super::{MimeType, Poster, SearchResults, SeriesDetails, SeriesFound, SeriesId};
@@ -17,14 +17,14 @@ pub struct Client {
 impl Client {
     pub fn new(api_key: String, api_access_token: String) -> Client {
         Client {
-            agent: ureq::AgentBuilder::new().build(),
+            agent: ureq::Agent::new_with_defaults(),
             api_key,
             api_access_token,
         }
     }
 
-    fn get(&mut self, path: &str) -> ureq::Request {
-        self.agent.get(&format!("{API_ROOT_URL}{path}")).set(
+    fn get(&mut self, path: &str) -> ureq::RequestBuilder<ureq::typestate::WithoutBody> {
+        self.agent.get(&format!("{API_ROOT_URL}{path}")).header(
             "Authorization",
             &format!("Bearer {}", self.api_access_token),
         )
@@ -42,13 +42,14 @@ impl Client {
         let mut buf = vec![];
         self.agent
             .get(&url)
-            .set(
+            .header(
                 "Authorization",
                 &format!("Bearer {}", self.api_access_token),
             )
-            .set("Accept", mime_type.as_str())
+            .header("Accept", mime_type.as_str())
             .call()
             .with_context(|| format!("TMDB::get_poster({path:?})"))?
+            .into_body()
             .into_reader()
             .read_to_end(&mut buf)?;
 
@@ -77,7 +78,8 @@ impl Client {
             query
                 .call()
                 .with_context(|| format!("TMDB::search_series({title:?}, {first_air_year:?})"))?
-                .into_string()?
+                .into_body()
+                .read_to_string()?
         };
 
         serde_json::from_str::<SearchResults<SeriesFound>>(&result_json).with_context(|| {
@@ -93,7 +95,8 @@ impl Client {
             .get(&format!("tv/{id}"))
             .call()
             .with_context(|| format!("TMDB::get_series_details({id})"))?
-            .into_string()?;
+            .into_body()
+            .read_to_string()?;
 
         serde_json::from_str::<SeriesDetails>(&result_json).with_context(|| {
             format!(
