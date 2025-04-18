@@ -42,6 +42,7 @@ impl SeriesDetailsChanges {
         }
 
         let mut summary = String::with_capacity(256);
+        summary += "\n";
         if let Some((old_in_prod, new_in_prod)) = self.in_production_change {
             summary += &format!(" - In production: {old_in_prod} => {new_in_prod}\n");
         }

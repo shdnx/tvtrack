@@ -11,7 +11,7 @@ pub struct SeriesEntry<'a> {
     pub poster: db::Poster,
 }
 
-impl<'a> SeriesEntry<'a> {
+impl SeriesEntry<'_> {
     pub fn poster_attachment_id(&self) -> String {
         let series_id = self.series.details.id;
         let poster_file_ext = self.series.details.poster_extension().unwrap();

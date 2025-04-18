@@ -59,7 +59,7 @@ impl<'de> Deserialize<'de> for SeriesStatus {
     {
         struct Visitor;
 
-        impl<'de> serde::de::Visitor<'de> for Visitor {
+        impl serde::de::Visitor<'_> for Visitor {
             type Value = SeriesStatus;
 
             fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {

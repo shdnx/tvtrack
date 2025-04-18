@@ -2,13 +2,13 @@ mod email_html;
 mod entry;
 
 use self::email_html::make_email_html;
-use self::entry::{series_changes_to_entries, SeriesEntry};
-use crate::{db, AppContext, SeriesDetailsChanges};
+use self::entry::{SeriesEntry, series_changes_to_entries};
+use crate::{AppContext, SeriesDetailsChanges, db};
 use anyhow::Context;
 use lettre::{
-    message::{header::ContentType, Mailbox, MultiPart, SinglePart},
-    transport::smtp::authentication::Credentials,
     Message, SmtpTransport, Transport,
+    message::{Mailbox, MultiPart, SinglePart, header::ContentType},
+    transport::smtp::authentication::Credentials,
 };
 use std::collections::HashMap;
 
@@ -67,7 +67,15 @@ pub fn send_email_notifications(
     let now = chrono::Local::now();
 
     for (user, series_entries) in users_to_entries.values() {
-        log::info!("sending email to {user} about: {series_entries:?}");
+        log::info!(
+            "sending email to {user} about {} series: {}",
+            series_entries.len(),
+            series_entries
+                .iter()
+                .map(|e| e.series.details.identify())
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
 
         let email_multipart_contents = MultiPart::mixed().multipart({
             let mut multipart = MultiPart::related().singlepart(

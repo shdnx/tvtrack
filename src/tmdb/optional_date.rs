@@ -21,7 +21,7 @@ impl From<Option<chrono::NaiveDate>> for OptionalDate {
 
 pub(crate) struct DeserializeVisitor;
 
-impl<'de> serde::de::Visitor<'de> for DeserializeVisitor {
+impl serde::de::Visitor<'_> for DeserializeVisitor {
     type Value = super::OptionalDate;
 
     fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {

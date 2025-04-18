@@ -36,6 +36,7 @@ impl Client {
 
     pub fn get_poster(&self, path: &str) -> anyhow::Result<Poster> {
         // TODO: we should be getting the base url and the image width closest to what we want from the TMDB API; see https://developer.themoviedb.org/docs/image-basics
+        // TODO: use bigger posters, like w154 or w185, and in the email, align them below the titles
         let url = format!("https://image.tmdb.org/t/p/w92{path}");
         let mime_type = MimeType::identify_from_ext(path)?;
 
@@ -72,7 +73,7 @@ impl Client {
                 .query("page", "1");
 
             if let Some(year) = first_air_year {
-                query = query.query("first_air_date_year", &year.to_string());
+                query = query.query("first_air_date_year", year.to_string());
             }
 
             query

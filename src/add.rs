@@ -43,7 +43,7 @@ pub fn add_series_by_title(
 
     let best_match = match best_match {
         None => {
-            log::warn!("-- No results");
+            log::error!("-- No results");
             return Ok(false);
         }
         Some(bm) => bm,
